@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 2,
+  "definitionId": "checkpoint-dag",
+  "version": "1",
+  "title": "Checkpoint adapters with parallel implementation and acceptance",
+  "members": [
+    {
+      "id": "cp-1",
+      "actor": "checkpoint adapter carrier",
+      "executor": "codely",
+      "workspaceRef": "controller-workspace",
+      "skillRef": "checkpoint-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{CONTROL_WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "cp-2",
+      "actor": "checkpoint adapter carrier",
+      "executor": "codely",
+      "workspaceRef": "controller-workspace",
+      "skillRef": "checkpoint-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{CONTROL_WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "cp-3",
+      "actor": "checkpoint adapter carrier",
+      "executor": "codely",
+      "workspaceRef": "controller-workspace",
+      "skillRef": "checkpoint-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{CONTROL_WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "cp-4",
+      "actor": "checkpoint adapter carrier",
+      "executor": "codely",
+      "workspaceRef": "controller-workspace",
+      "skillRef": "checkpoint-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{CONTROL_WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "cp-5",
+      "actor": "checkpoint adapter carrier",
+      "executor": "codely",
+      "workspaceRef": "controller-workspace",
+      "skillRef": "checkpoint-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{CONTROL_WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "cp-6",
+      "actor": "checkpoint adapter carrier",
+      "executor": "codely",
+      "workspaceRef": "controller-workspace",
+      "skillRef": "checkpoint-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{CONTROL_WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "cp-1",
+      "memberId": "cp-1",
+      "prompt": "Execute the task-owned checkpoint adapter. Only its verified, integrated receipt permits success; a model assertion or background launch is not completion.",
+      "dependsOn": [],
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{CHECKPOINT_ADAPTER}}",
+          "--plan",
+          "{{PLAN_FILE}}",
+          "--checkpoint",
+          "cp-1"
+        ],
+        "timeoutMs": 46800000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "cp-2",
+      "memberId": "cp-2",
+      "prompt": "Execute the task-owned checkpoint adapter. Only its verified, integrated receipt permits success; a model assertion or background launch is not completion.",
+      "dependsOn": ["cp-1"],
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{CHECKPOINT_ADAPTER}}",
+          "--plan",
+          "{{PLAN_FILE}}",
+          "--checkpoint",
+          "cp-2"
+        ],
+        "timeoutMs": 46800000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "cp-3",
+      "memberId": "cp-3",
+      "prompt": "Execute the task-owned checkpoint adapter. Only its verified, integrated receipt permits success; a model assertion or background launch is not completion.",
+      "dependsOn": ["cp-2"],
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{CHECKPOINT_ADAPTER}}",
+          "--plan",
+          "{{PLAN_FILE}}",
+          "--checkpoint",
+          "cp-3"
+        ],
+        "timeoutMs": 46800000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "cp-4",
+      "memberId": "cp-4",
+      "prompt": "Execute the task-owned checkpoint adapter. Only its verified, integrated receipt permits success; a model assertion or background launch is not completion.",
+      "dependsOn": ["cp-3"],
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{CHECKPOINT_ADAPTER}}",
+          "--plan",
+          "{{PLAN_FILE}}",
+          "--checkpoint",
+          "cp-4"
+        ],
+        "timeoutMs": 46800000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "cp-5",
+      "memberId": "cp-5",
+      "prompt": "Execute the task-owned checkpoint adapter. Only its verified, integrated receipt permits success; a model assertion or background launch is not completion.",
+      "dependsOn": ["cp-3"],
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{CHECKPOINT_ADAPTER}}",
+          "--plan",
+          "{{PLAN_FILE}}",
+          "--checkpoint",
+          "cp-5"
+        ],
+        "timeoutMs": 46800000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "cp-6",
+      "memberId": "cp-6",
+      "prompt": "Execute the task-owned checkpoint adapter. Only its verified, integrated receipt permits success; a model assertion or background launch is not completion.",
+      "dependsOn": ["cp-4", "cp-5"],
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{CHECKPOINT_ADAPTER}}",
+          "--plan",
+          "{{PLAN_FILE}}",
+          "--checkpoint",
+          "cp-6"
+        ],
+        "timeoutMs": 46800000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "limits": {
+    "maxConcurrency": 2
+  }
+}

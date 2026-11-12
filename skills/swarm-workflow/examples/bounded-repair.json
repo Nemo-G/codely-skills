@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "definitionId": "bounded-repair",
+  "version": "1",
+  "title": "Review with one authorized repair attempt",
+  "members": [
+    {
+      "id": "reviewer",
+      "actor": "Inspect exact candidate and report findings",
+      "executor": "codely",
+      "workspaceRef": "task-workspace",
+      "skillRef": "reviewer-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "implementer",
+      "actor": "Repair only the assigned findings",
+      "executor": "codely",
+      "workspaceRef": "task-workspace",
+      "skillRef": "implementer-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "review-first",
+      "memberId": "reviewer",
+      "prompt": "Read the saved task, its authorized scope and exact candidate revision. Return pass, repair or human with stable finding IDs using swarm_task for this assignment. Do not edit or merge.",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["pass", "repair", "human"]
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["decision", "findings"],
+        "additionalProperties": false
+      },
+      "pauseOn": {
+        "path": "/decision",
+        "values": ["human"],
+        "reason": "missing_user_decision"
+      }
+    },
+    {
+      "id": "repair",
+      "memberId": "implementer",
+      "dependsOn": ["review-first"],
+      "inputsFrom": {
+        "review": {
+          "node": "review-first"
+        }
+      },
+      "when": {
+        "node": "review-first",
+        "path": "/decision",
+        "equals": "repair"
+      },
+      "prompt": "Perform the one repair attempt authorized by the saved assignment. Address inputs.review findings, follow the task's required verification, and return the exact candidate SHA and evidence. Do not broaden scope, merge or start another repair loop.",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "candidateSha": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["candidateSha", "evidence"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "review-final",
+      "memberId": "reviewer",
+      "dependsOn": ["repair"],
+      "inputsFrom": {
+        "implementation": {
+          "node": "repair"
+        }
+      },
+      "prompt": "Review the exact candidate and evidence in inputs.implementation against the saved acceptance criteria. Return pass, repair or human. This is the final authorized review in this definition; do not lower the acceptance standard or start another attempt.",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["pass", "repair", "human"]
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["decision", "findings"],
+        "additionalProperties": false
+      },
+      "pauseOn": {
+        "path": "/decision",
+        "values": ["repair", "human"],
+        "reason": "repair_budget_or_human_decision"
+      }
+    }
+  ],
+  "limits": {
+    "maxConcurrency": 1
+  }
+}

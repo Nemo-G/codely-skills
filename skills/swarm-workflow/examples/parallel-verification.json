@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 2,
+  "definitionId": "parallel-verification",
+  "version": "1",
+  "title": "Parallel analysis, review and deterministic verification",
+  "members": [
+    {
+      "id": "api-reader",
+      "actor": "Read-only API analysis",
+      "executor": "codely",
+      "workspaceRef": "task-workspace",
+      "skillRef": "api-reader-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "storage-reader",
+      "actor": "Read-only storage analysis",
+      "executor": "codely",
+      "workspaceRef": "task-workspace",
+      "skillRef": "storage-reader-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "reviewer",
+      "actor": "Review and report",
+      "executor": "codely",
+      "workspaceRef": "task-workspace",
+      "skillRef": "reviewer-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    },
+    {
+      "id": "verifier",
+      "actor": "Execute the task-specific verification command",
+      "executor": "codely",
+      "workspaceRef": "task-workspace",
+      "skillRef": "verifier-assignment",
+      "launch": {
+        "entry": "{{NODE}}",
+        "cwd": "{{WORKSPACE}}",
+        "env": {},
+        "args": ["{{CODELY_ENTRY}}", "--approval-mode", "yolo"]
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "inspect-api",
+      "memberId": "api-reader",
+      "prompt": "Read the saved user assignment in the working directory. Inspect its API scope without changing files. Report evidence and unresolved questions. Complete this exact assigned task through swarm_task with the declared structured output; do not start other workers.",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["summary", "evidence"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "inspect-storage",
+      "memberId": "storage-reader",
+      "prompt": "Read the saved user assignment in the working directory. Inspect its storage scope without changing files. Report evidence and unresolved questions. Complete this exact assigned task through swarm_task with the declared structured output; do not start other workers.",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["summary", "evidence"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "review",
+      "memberId": "reviewer",
+      "dependsOn": ["inspect-api", "inspect-storage"],
+      "inputsFrom": {
+        "api": {
+          "node": "inspect-api"
+        },
+        "storage": {
+          "node": "inspect-storage"
+        }
+      },
+      "prompt": "Compare the committed input analyses with the saved user acceptance criteria. Do not edit files. Report pass only if the evidence supports proceeding to verification; use repair for concrete fixable findings or human for a missing user decision. Finish the exact task using its structured result schema.",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["pass", "repair", "human"]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["decision", "evidence"],
+        "additionalProperties": false
+      },
+      "pauseOn": {
+        "path": "/decision",
+        "values": ["repair", "human"],
+        "reason": "review_requires_followup"
+      }
+    },
+    {
+      "id": "verify",
+      "memberId": "verifier",
+      "dependsOn": ["review"],
+      "when": {
+        "node": "review",
+        "path": "/decision",
+        "equals": "pass"
+      },
+      "prompt": "Run the fixed verification command against the exact admitted candidate. Its nonzero exit is failure, not a model decision.",
+      "command": {
+        "entry": "{{NODE}}",
+        "args": [
+          "{{VERIFY_SCRIPT}}",
+          "--workspace",
+          "{{WORKSPACE}}",
+          "--expected-head",
+          "{{BASE_SHA}}"
+        ],
+        "timeoutMs": 600000
+      },
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "const": 0
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["exitCode", "stdout", "stderr"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "handoff",
+      "memberId": "reviewer",
+      "dependsOn": ["review", "verify"],
+      "inputsFrom": {
+        "review": {
+          "node": "review"
+        },
+        "verification": {
+          "node": "verify"
+        }
+      },
+      "prompt": "Report the verified outcome, exact candidate SHA and evidence paths from the saved assignment and command result. stdout is a string; do not assume it was automatically parsed. Report only what the evidence proves. Do not publish or merge anything unless the saved task explicitly authorizes it."
+    }
+  ],
+  "limits": {
+    "maxConcurrency": 2
+  }
+}
