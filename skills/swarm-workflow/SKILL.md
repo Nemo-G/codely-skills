@@ -148,6 +148,55 @@ current member/process/task facts. External executors have partial visibility;
 report only dispatch/session/exit/result evidence actually observed by the
 authority and never infer hidden progress.
 
+### Send a steer and verify its receipt
+
+For a steer sent with `swarm_send`, retain the exact team ID, target member ID,
+current tenure/generation, returned `messageId` and mailbox sequence. The send
+response is the sender-side acceptance receipt: the durable mailbox write was
+accepted. It does not prove that the recipient session has consumed the message
+or started the requested work.
+
+Verify the exact message through the per-team journal, paging from the returned
+nextCursor and expanding canonical references when needed:
+
+    codely swarm events --team <team> --member-id <targetMemberId> --limit 50 --json
+    codely swarm events --team <team> --member-id <targetMemberId> --after <journalId:cursorSequence> --limit 50 --expand --json
+
+The mailbox sequence printed by `swarm_send` is not the journal cursor sequence.
+Match evidence references to both the mailbox message ID and its sequence; check
+the receiver member/tenure/generation on the committed and ACK facts. Read the
+canonical recipient conversation record when the ACK reference needs
+verification. An ACK proves the message was committed to the recipient's
+canonical session. If that same ACK carries turnEndedAt, the model turn carrying
+the steer also ended. Neither fact proves the requested task completed.
+
+Treat a matching journal fact as positive evidence. A missing fact is
+inconclusive: the canonical conversation or ACK write can succeed while its
+subsequent journal fact is absent. In that case, use the installed version's
+read-only exact transcript/ACK lookup. If no such lookup is exposed, report
+consumption as unknown and request a correlated task or result receipt; do not
+infer failure from a missing journal row or an empty mailbox.
+
+For actionable steers, ask the leader to report against the original `messageId`
+and mailbox sequence. If the sender is a team member, the leader can return a
+`kind=result` message to that member. For an external sender, use its registered
+return channel; do not assume a generic Codely mailbox can reach an outer chat.
+The labels below are a requested reply convention, not automatic Swarm states:
+
+- received: identify the matching committed/ACK evidence;
+- in_progress: give the claimed task/run ID and owner;
+- blocked: name the actual prerequisite or error and supporting evidence;
+- completed: provide the canonical task result or artifact reference.
+
+Verify progress and completion against `swarm_task` or `swarm workflow status` and
+the durable result. Use the sender's supported return channel for that report;
+a detached external CLI or outer chat is not implicitly woken by a mailbox ACK.
+If only accepted or committed is proven, report that phase and leave consumption
+pending or unknown until exact recipient evidence is available.
+An empty inbox, an idle member or a local coordinator log does not prove
+consumption. Do not resend the steer or create a duplicate task until its
+possible existing side effects have been checked.
+
 When a run is not terminal, still has pending tasks and no task of it is
 running, the same inspection tick delivers at most one bounded, fact-only
 **coordination reminder** to the leader mailbox: run identity, pending/active

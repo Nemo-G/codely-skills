@@ -354,6 +354,35 @@ boundaries rather than reporting them as passed.
 - `swarm_send` acceptance does not prove the recipient processed the message.
   Check the relevant recorder/result/ACK. Do not assume a stopped recipient is
   automatically restarted by sending, or treat idle as task completion.
+- For a steer, retain the returned `messageId` and mailbox sequence together with
+  the team, target member, tenure and generation. The send receipt proves durable
+  mailbox acceptance only. Verify the matching message_committed and
+  `message_acked` journal facts, following `nextCursor` for pagination and expanding
+  their canonical message references as needed. Match both messageId and mailbox
+  sequence to the `mailbox_message` reference; the journal cursor sequence is a
+  separate sequence space. Check receiver fence identity and, when needed, the
+  canonical conversation record referenced by the ACK. Matching journal facts
+  are positive evidence; missing facts are inconclusive because the canonical
+  transcript or ACK write can outlive a missing journal append. Use the
+  installed version's read-only exact transcript/ACK lookup. If none is exposed,
+  mark consumption unknown and request a correlated task/result receipt instead
+  of inferring failure from an absent journal row or empty mailbox.
+- A durable ACK proves the message reached that receiver's canonical session.
+  If that exact ACK has `turnEndedAt`, the model turn carrying the steer ended.
+  Neither proves requested work is done. For actionable steers, ask for a result
+  correlated to the original `messageId`/sequence: received with matching ACK
+  evidence; in_progress with task/run ID and owner; blocked with its actual
+  prerequisite/error; or completed with a canonical result/artifact reference.
+  These are requested reply labels, not automatic Swarm status values.
+  Verify progress/results through `swarm_task`, workflow status or the durable
+  result. Use the sender's supported return channel for the semantic report. A
+  detached external CLI or outer chat is not implicitly woken by mailbox ACK.
+  When only accepted/committed is proven, report that phase and keep consumption
+  pending/unknown until exact recipient evidence is available. An empty inbox,
+  idle member or local coordinator log does not prove consumption. Do not resend
+  or duplicate a task until its possible side effects have been checked. If the
+  sender is a team member, return a `kind=result` message to it; for an external
+  sender, use its registered return channel.
 - The existing persistent runtime polls tasks and has a bounded fallback wake.
   If work stays pending, inspect worker mode, liveness, claim ownership and
   dependencies first; do not invent a new queue or blame missing wake-up.
