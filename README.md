@@ -5,6 +5,33 @@ Control-plane. Each skill lives in its own sibling folder under `skills/`, so
 users can install one skill or the complete Codely skill suite from this single
 repository.
 
+## Prerequisites
+
+Install Codely before using these skills, then run the following probe:
+
+```sh
+codely --version
+codely --cmd model
+```
+
+`codely --cmd model` is both a capability and authentication check: it requires
+Codely to load the current credential and fetch the available model catalog. If
+it succeeds, an existing cached login or `CODELY_TOKEN` is already usable; skip
+authentication setup.
+
+If `codely` is not found, install Codely using the distribution for your
+environment and rerun the probe. If the model probe fails specifically because
+authentication is missing:
+
+- In a non-interactive or headless environment, provide `CODELY_TOKEN` through
+  the process environment, then rerun `codely --cmd model`. Never print, commit,
+  or place the token in a Chart, prompt, or command-line argument.
+- In an interactive terminal, launch `codely`, enter `/auth`, complete Codely
+  authentication, exit the session, then rerun `codely --cmd model`.
+
+Do not replace credentials merely because the probe reports a network or model
+catalog error; preserve the original error and resolve that failure first.
+
 ## Install
 
 ```sh
