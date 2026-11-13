@@ -7,7 +7,46 @@ repository.
 
 ## Prerequisites
 
-Install Codely before using these skills, then run the following probe:
+Install one Codely release lane before using these skills. Do not install the RC
+and Nightly lanes side by side.
+
+### RC lane
+
+The public npm package publishes the release-candidate line on its `latest`
+dist-tag and requires Node.js 20 or newer:
+
+```sh
+npm install -g @unity-china/codely-cli@latest
+```
+
+### Nightly lane
+
+Nightly is the daily snapshot lane. It has not completed the RC lane's full QA,
+regression, or stability verification. The Nightly documentation recommends
+Node.js 26.4 or newer and requires removing the public npm installation before
+running the platform installer.
+
+Windows PowerShell:
+
+```powershell
+npm remove -g @unity-china/codely-cli
+iex (iwr "https://codesearch-plugins.tos-cn-shanghai.volces.com/codely-cli/install.ps1" -UseBasicParsing)
+```
+
+Linux or macOS:
+
+```sh
+npm remove -g @unity-china/codely-cli
+curl -fsSL "https://codesearch-plugins.tos-cn-shanghai.volces.com/codely-cli/install.sh" | bash
+```
+
+See the [npm package](https://www.npmjs.com/package/@unity-china/codely-cli)
+and the official [Codely CLI Nightly guide](https://codely-docs.tuanjie.cn/en/using-codely/codely-cli-nightly/)
+for the current published versions and platform notes.
+
+### Verify installation and authentication
+
+Whichever lane you choose, run the same probe:
 
 ```sh
 codely --version
@@ -19,9 +58,8 @@ Codely to load the current credential and fetch the available model catalog. If
 it succeeds, an existing cached login or `CODELY_TOKEN` is already usable; skip
 authentication setup.
 
-If `codely` is not found, install Codely using the distribution for your
-environment and rerun the probe. If the model probe fails specifically because
-authentication is missing:
+If `codely` is not found, repair the selected installation lane and rerun the
+probe. If the model probe fails specifically because authentication is missing:
 
 - In a non-interactive or headless environment, provide `CODELY_TOKEN` through
   the process environment, then rerun `codely --cmd model`. Never print, commit,
@@ -32,7 +70,7 @@ authentication is missing:
 Do not replace credentials merely because the probe reports a network or model
 catalog error; preserve the original error and resolve that failure first.
 
-## Install
+## Install skills
 
 ```sh
 npx skills add Nemo-G/codely-skills --skill swarm-workflow
