@@ -1,6 +1,9 @@
 # Codely skills
 
-Agent skills for operating Codely through its public CLI and Control-plane.
+A multi-skill repository for operating Codely through its public CLI and
+Control-plane. Each skill lives in its own sibling folder under `skills/`, so
+users can install one skill or the complete Codely skill suite from this single
+repository.
 
 ## Install
 
@@ -14,6 +17,40 @@ installing:
 ```sh
 npx skills add Nemo-G/codely-skills --list
 ```
+
+Install every skill in the repository with:
+
+```sh
+npx skills add Nemo-G/codely-skills --all
+```
+
+## Repository layout
+
+```text
+codely-skills/
+├── skills/
+│   ├── swarm-workflow/
+│   │   ├── SKILL.md
+│   │   ├── examples/
+│   │   └── references/
+│   └── another-skill/
+│       └── SKILL.md
+├── LICENSE
+├── NOTICE
+└── README.md
+```
+
+Add future skills as sibling directories such as `skills/<skill-name>/`; do not
+place unrelated skill entrypoints inside `skills/swarm-workflow/`. Every skill
+owns its `SKILL.md` and any optional `agents/`, `scripts/`, `references/`,
+`examples/`, or `assets/` resources it actually needs.
+
+Do not add an `allowed-tools`/`allowedTools` allowlist by default. Third-party
+agents expose different tool names and capability models, so a portable skill
+must not assume one host's internal tool schema. Let the host provide its normal
+tool set and have the skill discover the concrete commands and capabilities at
+runtime. Add a tool restriction only when a specific target platform requires a
+documented, portable restriction contract.
 
 ## swarm-workflow
 

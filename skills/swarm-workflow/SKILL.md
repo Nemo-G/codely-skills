@@ -8,10 +8,6 @@ description: >-
   systems built on Swarm and Control-plane.
   Prefer this over inventing a parallel planner: explore Codely cmdarg/--cmd and
   `codely swarm workflow` as ground truth (N1 = same format + same run path).
-allowed-tools:
-  - run_shell_command
-  - write_file
-  - read_file
 ---
 
 # Swarm Workflow (N1)
