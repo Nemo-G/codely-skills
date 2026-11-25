@@ -22,6 +22,58 @@ Accept a short request naming the goal, roles, models and constraints. Own the
 discovery and execution procedure; do not ask the user to supply a tool manual.
 **Never guess** model ids, auth, tools or chart fields.
 
+## Return results to the requesting session
+
+In Codely, a leader chat can create the team in its own session. From Codex
+or Cursor, delegate to a native Codely leader through an ACP client that
+keeps its stdio connection open. For unattended work, use the
+[supervised leader host](references/agent-system-deployment.md#unattended-leader-and-member-recovery).
+Record the requesting session, its return channel, the ACP `sessionId` of
+the bound leader session, `teamId` and the managing leader member ID.
+Keep the connection open while members work and verify that a later prompt in
+the same leader session can read the team. If startup stops, record the last
+successful ACP request and the next request's actual error. For example, if
+`initialize` succeeds and `session/new` cannot write its project state, the
+outer client has no leader session to dispatch from.
+
+For unattended work, verify the host's isolation and use the same account,
+workspace, state directory and tool policy for preflight and execution.
+Start the intended client, retain its successful `session/new` receipt, and
+read the team back in that session. Verify the first required operation
+through the role that will perform it. Check the carrier and the external
+member separately, including the member's login, permitted workspace, tools
+and MCP access. After a restart, verify the same identity and permitted
+scope from the running processes. Keep credentials out of the receipts.
+If access is denied, record the failing operation, path or service, and
+error; leave that action pending and continue independent tasks. Publishing
+guidance and changing user availability still require the user's confirmation
+of the specific change. An offline decision uses the current recorded grant.
+
+On return, use the original leader session to read the durable task or run
+result and send those references back to the requesting session. Give the
+user `codely swarm attach --team <team-name>` for a terminal leader, or the
+ACP `session/load` identity and working directory, to reopen the same conversation.
+
+For “Bob must review every release”, declare the delivery, Bob's review,
+rework and publication dependencies in a Chart. Record the same `runId`
+for Bob returning v1, Alice delivering v2, Bob approving v2 and the
+publication that consumes that approval. Check that the v1 return left
+publication unexecuted. On re-entry, query the original `runId` with
+`swarm workflow status`. Follow a running Chart in place. If it is paused
+and continuation is authorized, resume the same `runId`. If admission has
+not happened yet, continue validating the saved Chart before dispatch.
+Report the admission error if it persists.
+
+For “Alice may ask Bob”, follow [the ordinary review handoff](#review-a-versioned-ordinary-delivery).
+Alice decides whether to open a review. Give Alice and Bob the task ID and
+artifact revision to cite, and agree who will open any rework before dispatch.
+The leader reads the receipts when the requester returns.
+
+Capture the path and digest of the skill the initiating client actually
+loaded. Retain Codely's `activate_skill` result or the Codex/Cursor file
+read of the deployed `swarm-workflow/SKILL.md`. For unattended recovery
+retain the linked recovery recipe's digest from the same installation.
+
 ## Choose how to dispatch work
 
 Flexible collaboration uses team messages and shared tasks. A Workflow declares
@@ -107,9 +159,69 @@ user explicitly confirms the exact text to save or update in the leader chat.
 Call `publish_guidance` with that `text` and the `expected_version` read
 from the team. If another publication wins first, read the new version and
 reconfirm the proposed update. Report the version actually saved.
+If the leader cannot obtain the user's one-time confirmation for a proposed
+version, keep that version pending. Continue independent work under the
+last genuinely confirmed guidance and rules. An unattended agent's general
+tool approval cannot stand in for the user's publication decision.
 The guidance is advisory. A change in review
 instructions applies to subsequent work; record any change to an in-flight
 task explicitly. Retain the delivery and review references already committed.
+
+## Apply ordinary-task rules
+
+Read the current `ordinaryPolicy` through `get_guidance` or
+`team_guidance_get`. Guidance text stays advisory. To enforce a change, the
+user confirms the complete text and structured rules in the leader chat.
+Use stable member IDs in `memberDuties`, task kinds in `taskEligibility`,
+and the dispatcher's member ID plus any conditions in `reassignGrants`.
+An update containing only text retains the last confirmed rules. Submit
+empty rule lists to revoke them.
+
+On creation, use `taskKind` in MCP or `task_kind` in native `swarm_task`.
+Check the live task and applicable policy before handoff. MCP members use
+`task_reassign` with a stable request ID, the target member and a reason;
+for an owned turn, read `claimIdentity` from the dispatcher's own `task_get`
+response and pass its four fields with the task ID. Re-read the task if
+the turn has changed. A repeated request must describe the same handoff.
+
+For unassigned, claimable ordinary work, the supervisor uses the team's
+existing wake policy and remaining action budget. A pending wake reservation
+identifies a candidate and expires if the task remains unclaimed. Read the
+actual holder from the task: an online eligible member can still
+`task_claim` it before the parked member returns. Use the Chart's assignment
+and capabilities for work admitted through a Chart.
+
+## Handle a decision while the user is away
+
+Use `swarm_manage status` to read `userAvailability`. With no declaration
+the user is present at version 0. The leader records a user's departure or
+return with `set_user_availability`, the requested `availability` and the
+observed availability `expected_version`. This takes the user's explicit
+one-time confirmation. A disconnected client does not declare an absence.
+
+For a delegated ordinary handoff, use `publish_guidance` to present the
+full guidance text and replacement rules for confirmation. An
+`offlineReassign` entry specifies `trigger: user_declared_away`,
+`taskKind`, `toMemberId` and an optional `fromMemberId`. Keep the
+corresponding ordinary reassignment grant when the leader is acting for
+another holder. To revoke only offline permission, publish the complete
+ordinary rules you intend to retain with an empty `offlineReassign` list.
+Guidance versions and availability versions are independent.
+
+1. A member uses `swarm_task propose_decision` with a stable UUID in
+   `decision_id`, the ordinary `task_id`, `to_member_id`, reason and the
+   observed claim's four identity fields. Preserve this ID across restarts.
+2. The leader uses `process_decision` with the same task and decision IDs.
+   With no applicable authorization, leave it pending and continue independent
+   tasks. Processing rechecks the current confirmed rules and the declared
+   absence window.
+3. On return, page through `list_decisions` and read details with
+   `get_decision`. Report `pending` as waiting, `awaiting_confirmation` as
+   an attempted operation whose effect still needs checking, and
+   `executed` with its actual handoff receipt and authorization basis. An
+   executed decision can still lack `acknowledgedAt` after an interruption.
+   The leader reuses `process_decision` to reconcile that receipt. Use the
+   ordinary task path for new instructions from the returning user.
 
 ## Review a versioned ordinary delivery
 
@@ -125,7 +237,8 @@ separate ordinary tasks so each decision has its own holder and receipt.
    `delivery.committedRecordId`. With MCP read `ordinary.committedRecordId`
    from `task_get`. Keep the task ID and the committed record ID together.
    Use this readback for each delivery and review before reporting its outcome.
-2. **Review v1.** Assign a review task to another member. The reviewer reads
+2. **Review v1.** When independent review is needed, the implementer opens the review task
+   for the reviewer and passes the delivered task ID and artifact revision. The reviewer reads
    the delivered task and verifies that version of the artifact. With MCP,
    `task_get` supplies `taskId`, `sequence` and `ordinary.artifact`.
    In the reviewer's own `task_complete`, set `referencedTask.taskId` to that
@@ -134,9 +247,12 @@ separate ordinary tasks so each decision has its own holder and receipt.
    the corresponding delivery field is `delivery.referenced_task` with
    `task_id` and `task_sequence`. Report the verdict, reviewed revision and
    digest in the review's summary.
-3. **Rework v2.** If the reviewer requests changes, record the review task's
-   ID and `committedRecordId` in the rework task description. Cite that
-   review in the rework delivery, with the v2 artifact revision and digest.
+3. **Rework v2.** On a return, the reviewer sends the committed verdict directly to the implementer.
+   The member responsible for follow-up opens the rework task with the review
+   task ID and `committedRecordId`. The implementer cites that review in the
+   v2 delivery with the revised artifact and its digest. On settlement,
+   read back the structured reference from native `delivery.referencedTask` or
+   MCP `ordinary.referencedTask` and verify the cited task and sequence.
    Open a new review task and cite the v2 **work task** in its receipt.
    Preserve the earlier v1 delivery and decision. Report approval only after
    the review receipt identifies the same task and artifact version.
@@ -180,6 +296,13 @@ execution source, scan logs, or auto-recover. The global Control-plane page is
 an example/overview, not the team's deliverable.
 
 ## Decide whether Control-plane is required
+
+For unattended work that must survive a leader process crash, follow the
+[leader and member recovery recipe](references/agent-system-deployment.md#unattended-leader-and-member-recovery)
+before admission. Identify the independent host that can restore the original
+leader session and the execution host that can bring each required member back.
+Report automatic recovery as unverified until the deployed skill and those
+hosts have completed the crash scenario together.
 
 Do not classify a task by the word "complex", a node count or a duration guess.
 **Use a persistent Control-plane for the same Swarm root if any condition holds:**
@@ -380,8 +503,11 @@ approval policy or authorize extra Git changes, publication or deployment.
 
 ## Reveal before authoring
 
-Do not guess. Explore cmdarg / `--cmd` / subcommand `--help` first (full map:
-[cmd-reveal.md](references/cmd-reveal.md)).
+Use the tools and schemas already advertised in the current session. In a
+native Codely chat, `swarm_manage` action `status` shows whether the session
+already owns a team. For a requested new team, use `create` in that session.
+Look up a specific subcommand's `--help` when its arguments are unknown.
+[Command discovery reference](references/cmd-reveal.md).
 
 ```powershell
 codely --help
@@ -420,8 +546,10 @@ schema → capabilities → examples/init → validate → plan → run
 7. `run --team … --file … --run-id <uuid-v4>`
 8. `status` / pause / resume / cancel / retry as needed
 
-Discovery JSON commands need `--json`. Fix via `WORKFLOW_*` envelopes — do not
-bypass validate/plan.
+`codely swarm list --json` returns `items` and `nextCursor`. For another
+page, pass that cursor with `--cursor`; a null cursor ends the list. Omit
+`--json` for the text table and leader attach hint. The Workflow discovery commands above support `--json`; use their
+`WORKFLOW_*` errors to correct the Chart before admission.
 
 ## Save and reuse a Chart template
 

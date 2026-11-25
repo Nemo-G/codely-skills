@@ -323,7 +323,7 @@ continuously attached exception is defined in the skill's decision checklist.
 
 ```text
 codely serve control-plane --host 127.0.0.1 --port 4040 \
-  --swarm-root <the same absolute root the CLI uses> --no-rollout --open
+  --swarm-root <the same absolute root the CLI uses> --no-rollout
 ```
 
 Keep it in its own terminal or an existing process manager, and reuse an
@@ -548,12 +548,15 @@ that root, independent of repository or current directory. `--swarm-root` is an
 explicit isolation
 override, not a per-team requirement. Monitoring includes no-Chart teams and
 actively joined members; do not equate the workflow run list with the full roster.
-Mechanical recovery is not a Control-plane policy. The periodic inspection
+The stale-member inspection pass
 detects a verifiable incident (stale membership with active work, failed work,
 human-required pause), persists one stable attention fact and notifies the
-leader/coordinator. The inspection tick is not a workflow tick and does not
-start or resume a worker, advance a generation, choose attempt/backoff limits
-or re-run a task. The leader/coordinator inspects the durable task/member/run
+leader/coordinator. This inspection tick is not a workflow tick: stale-member
+inspection never starts or resumes a worker. Separately, the enabled idle-wake policy may call the
+worker launcher for an eligible parked local member. For unattended leader
+re-entry, verify the independently hosted recovery path in the
+[deployment recipe](agent-system-deployment.md#unattended-leader-and-member-recovery).
+The leader/coordinator inspects the durable task/member/run
 state and decides whether, when and how to advance or recover through the
 existing public controls (`swarm_manage`, `worker resume/stop`, `workflow
 resume/retry`). Whatever action it chooses must preserve generation fences, the

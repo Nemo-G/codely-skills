@@ -137,6 +137,9 @@ codely serve control-plane --help
 ```
 
 Use the installed schema and capability discovery as the compatibility contract.
+For scriptable team discovery, check that your installed CLI advertises
+`codely swarm list --json`. The response contains `items` and `nextCursor`.
+
 No universal minimum version is asserted: this public snapshot has not been
 qualified against a matrix of released Codely versions. In particular, explicit
 headless support is platform-dependent; follow the installed capability response.

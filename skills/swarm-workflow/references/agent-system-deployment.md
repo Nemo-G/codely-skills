@@ -196,10 +196,70 @@ replace or restart another task's monitor merely to obtain the default port.
    For an outer checkpoint graph with inner teams, retain both sets of IDs in
    the application's read-only progress snapshot and confirm inner teams appear
    when admitted. A healthy outer team does not prove its child work is visible.
-5. End the model turn once dispatch and observation are established. The monitor
-   and attached runtime continue without model calls; the monitor only observes
-   and notifies, and any recovery decision remains the coordinator's. Do not
-   spend model calls polling.
+5. End the model turn once dispatch and observation are established. The
+   monitor and attached runtime continue independently. Use supervisor events
+   and durable receipts to track progress between model turns.
+
+### Unattended leader and member recovery
+
+For a local ACP leader, have the requesting ACP client or its persistent
+adapter launch `codely serve swarm-leader --team <team-name> --swarm-root <absolute-root>`
+as its stdio server. Keep stdin and the response reader open. Send
+`initialize`, then `session/new` for a new leader. Retain the returned
+`sessionId`. Use `session/prompt` on that session to create the named team
+with its native leader. To reopen a bound session, use `session/load` with
+its recorded identity and working directory. Check the host's stderr
+`swarm_leader_armed` event against the team, leader and session, then issue
+a follow-up status query. Read the result back through this client.
+Closing the client ends the host.
+
+For an unexpected leader exit, match `swarm_leader_reopening` and
+`swarm_leader_recovered` to the original `hostPid`, `teamId`, leader
+`memberId`, `tenureId` and `sessionId`. Record the replacement child PID,
+generation and instance. Use `swarm_leader_work_observed` and the recovered
+leader's `swarm_leader_member_resume_requested` and
+`swarm_leader_member_resume_result` events to trace B's recovery request.
+Verify B's resulting process and delivery in the durable records below.
+
+1. **Check the operator surface.** Start or reuse the persistent Control-plane
+   for the team's absolute Swarm root as described above. Read
+   `GET /__codely__/health` twice and verify that `swarm.supervisor.ticks`
+   advances. Find the exact team in `GET /__codely__/control-plane/swarm/teams`.
+   For a Chart, verify the admitted run in the team's snapshot. These checks
+   establish monitor coverage. Record the separate component that owns leader
+   restart, the host it runs on, and how it detects the old leader's exit.
+   If no such component is deployed, report monitoring available and unattended
+   leader recovery unavailable.
+2. **Choose the member surface.** An external member joins through its
+   Gateway and discovers tools on `/v1/swarm/mcp` with its own member identity.
+   Use that connection for its assigned work and delivery. Keep Control-plane
+   management with the authorized coordinator. The idle-wake policy can
+   resume eligible parked local workers. A dormant local headless member
+   requires explicit activation, and a remote member needs a reachable
+   execution host.
+3. **Recover in order.** The independent host detects the crash and requests
+   re-entry to the original leader session (ACP `session/load` for an ACP
+   leader). Verify the session lease. The leader keeps its team ID, member ID,
+   tenure ID and session ID, and its generation increases by exactly one.
+   The restored leader reads current tasks, committed delivery receipts and
+   mailbox state, then requests recovery of the member needed for pending work
+   on its execution host. Recheck identity and the current management intent
+   before launch.
+4. **Test the shipped skill.** After changing these instructions, build the
+   candidate and start a fresh isolated acceptance run from a natural-language
+   goal. Capture the actual `activate_skill` result or external client's file
+   read, its path and SHA-256, the referenced recipe's digest, and the matching
+   packaged files, source revision and CLI artifact digest. Establish one
+   committed delivery by A, pending work for B, and an operator stop for C.
+   Terminate the leader and B. The test driver injects the exits and observes;
+   the deployed recovery host must initiate leader re-entry and the recovered
+   leader must initiate B's recovery. Record both initiators, old/new process
+   and session identities, journal sequences and task receipts. Pass when the
+   original leader returns once, A retains one delivery, B has one effective
+   instance and finishes its task, and C stays stopped with durable management
+   intent `operator_stopped`. The stop operation's `cause: operator` records
+   who initiated the stop. Repeat this run if the delivered recovery
+   instructions change before sign-off.
 
 For example, from PowerShell on the host that can reach the monitor (replace
 the IDs with the recorded values; these calls only read status):
