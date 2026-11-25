@@ -12,12 +12,10 @@ coordinator attached throughout and none of those requirements may use the CLI
 alone. Adding a monitor after the controller disappears does not provide
 continuous coverage; a DAG label by itself is not the deciding condition.
 
-An attended caller may explicitly activate a new headless member for one work
-unit, wait for its terminal outcome, then activate the same member again,
-without a Control-plane process. See [headless-members.md](headless-members.md).
-This is not unattended scheduling: the current monitor does not automatically
-activate headless DAG successors. Preserve the existing persistent worker
-deployment when the user has not explicitly requested the new execution mode.
+An attended caller can activate a local headless member for one unit and wait
+for its outcome without a Control-plane process. Dormant local members need a
+caller for each activation. A running remote on-demand host polls the Gateway
+for ready assignments. See [headless-members.md](headless-members.md).
 
 ## Assign ownership before starting processes
 
@@ -90,9 +88,9 @@ waiting for input. Never construct Swarm's internal fence argv yourself.
 ## Prepare, verify, admit
 
 This recipe and its portable executable examples describe persistent workers.
-For new explicit headless members, use the dedicated headless reference instead:
-its launch entry is exactly `codely`, and it resolves the current installation
-internally. Registration does not start a process or require readiness.
+For on-demand execution, see [headless-members.md](headless-members.md). Local
+headless preparation pins a `codely` launch without starting a process. Remote
+on-demand serves an already joined member through the Gateway.
 
 Read [team-execution.md](team-execution.md) for the create/join lifecycle;
 `swarm create` attaches a session, not a fire-and-forget provisioning RPC.
@@ -235,8 +233,8 @@ same root. Report the observation gap and withhold new admissions/resumption
 until the team/run snapshot is verified again.
 
 A DAG with running persistent workers can still advance via core task dependencies during an
-outage. Dormant headless successors still require a caller to activate them;
-admission or monitoring does not supply that caller. If the task requires execution itself to stop when monitoring is lost,
+outage. Dormant local headless successors require explicit activation. If the
+task requires execution itself to stop when monitoring is lost,
 configure an authorized application policy that invokes the existing pause/cancel
 control and verifies settlement. Control-plane unavailability does not
 automatically pause the graph, and requesting pause can interrupt active work.

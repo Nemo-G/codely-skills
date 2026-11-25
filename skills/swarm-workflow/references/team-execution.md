@@ -9,21 +9,31 @@ For outer checkpoint commands that own inner agent teams, read
 [checkpoint-adapters.md](checkpoint-adapters.md); that composition uses the same
 runtime, but its business verification and Git integration are task-owned.
 
-For a newly requested on-demand headless member, use
-[headless-members.md](headless-members.md). Its separate prepare/activate/status
-surface registers without spawning and executes one unit per explicit
-activation. The persistent-worker preparation and stop/resume procedures below
-continue to apply to existing durable workers; do not use them to convert a
-headless member or to end its normal successful activation.
+See [headless-members.md](headless-members.md) for local explicit activation
+and the attached remote on-demand host. The preparation and resume steps below
+describe persistent workers. Local headless uses `headless activate` to start
+each unit and exits on normal completion.
 
 ## Choose the execution shape
 
-- A team can collaborate through `swarm_manage`, `swarm_worker`, `swarm_send`
-  and `swarm_task` without a Chart. Session-private `job_*` tasks are not the
-  shared team task board.
-- Use a Chart when the user needs explicit dependencies, conditions, durable
-  results or bounded repair rounds. Keep role instructions distinct from
-  membership permissions: reviewer is a responsibility, not a new leader role.
+- Flexible collaboration uses team membership, messages and shared tasks
+  through `swarm_manage`, `swarm_worker`, `swarm_send` and `swarm_task`.
+  The shared task board belongs to the team and `job_*` tasks belong to a session.
+- A Workflow uses a Chart to declare dependencies, conditions, structured
+  result handoff or bounded repair rounds. Reviewer is a task responsibility.
+  Membership permissions follow the assigned Swarm role.
+- A remote on-demand host runs Gateway-ready Chart nodes bound to its joined
+  member. Mailbox work requires a recipient that consumes it. Keep ordinary
+  shared tasks in a separate team or use persistent workers for a mixed backlog
+  because unbound ordinary tasks can be offered to the on-demand host.
+- Example ("have `reader` read README, then have `reviewer` verify it"):
+
+| User intent                                                       | Dispatch path                                                                                | Receipt & completion signal                                                                                                                                                           |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ad-hoc collaboration with two named recipients | `swarm_send` with persistent recipients or explicit local headless activation. Send `work` to `reader`, who hands off to `reviewer`. | The send receipt confirms mailbox acceptance. Confirm completion from the reviewer's `result` reply to Leader. |
+| Team backlog showing who claimed each step and what is blocked | `swarm_task` with persistent workers. Create two tasks with `blocked_by` and agree where to read the summary. | Check owner, blockers and completion by `task_id` with `swarm_task status` or `codely swarm task status`. `blocked_by` gates claiming. |
+| Repeatable two-step flow with automatic structured output handoff | Chart (`dependsOn` + `inputsFrom`)                                                           | Receipt returns `runId` and `codely swarm workflow status` lookup; inspect both nodes' committed results and same-run `inputsFrom` lineage by `runId`.                                |
+
 - Preserve explicit model/executor choices. The controller remains on the
   default Codely model unless requested otherwise. A role file affects the worker
   only through a supported CLI/env entry; a `skillRef` label alone is not proof
@@ -35,12 +45,22 @@ headless member or to end its normal successful activation.
    belonging to this work. Record the intended workspace and member names.
 2. Persist the actual launch configuration before using it: `entry`, `cwd`,
    `env`, optional ordered `preScripts`, and `args`. Scripts use an explicit
-   interpreter. Apply the worker approval contract below. Do not inject provider
+   interpreter. An omitted or unset member turn timeout is unlimited.
+   Only an explicit positive integer narrows the member-turn budget.
+   Command, preScript and tool timeouts are independent.
+   Reconcile uncertain effects before retry.
+   For a wedged unlimited turn, check whether pause/cancel requested control
+   of the active turn, or verify exit through the worker stop operation. Set
+   `launch.turnTimeoutMs` for a finite budget.
+   Apply the worker approval contract below. Do not inject provider
    configuration per node, auto-add `--auth`, or mutate shared `/model use` settings.
-3. `swarm create` / `swarm join` attach the current CLI session. They are not
+3. `swarm create` / `swarm join` / `swarm attach` attach the current CLI
+   interactive terminal session (`codely swarm attach --team <team>` re-enters
+   an existing team as its original leader). They are not
    one-shot provisioning commands to timeout and abandon. `worker spawn`
    creates membership itself; do not join a member and then spawn that same
-   attached name. Resume stopped/stale workers through the existing controller;
+   attached name. Resume stopped/stale background workers through the existing
+   controller (`worker resume` runs in background headless mode);
    do not duplicate healthy members or assume a stale PID belongs to this work.
 4. Verify the worker controller's readiness result and current fence/presence,
    not just a roster row, a PID or `plan.runnable`. The persistent worker runs
@@ -154,12 +174,32 @@ and never turns into an implicit leave.
   The deadline bounds the wait, never the durable operation: a timeout reports
   `unconfirmed` and leaves the same operation for a later CLI to continue.
 - Inspection never starts or resumes a worker. An unresolved stop intent marks
-  that exact fence as operator-stopped; an explicit `worker resume` is the atomic end of the intent and
-  mints exactly one new generation; a late retry of the old request never
+  that exact fence as operator-stopped; an explicit `worker resume` runs in
+  background headless mode, is the atomic end of an operator/idle stop intent
+  and mints exactly one new generation; a late retry of the old request never
   affects the new generation. A resume keeps the canonical session and does not
   replay completed tasks. A resume is not evidence that the old orphan exited:
   it only ends the stop intent for the old fence, so the old process tree must
   be settled by its own operation before anyone claims it is gone.
+- `worker resume --readiness-timeout <ms>` (tool parameter `readiness_timeout`)
+  sets the readiness wait budget (default 60000 ms, valid integer 1..600000 ms;
+  invalid values fail closed with `SWARM_INVALID_NAME`). The fixed native
+  Swarm tool under `claude_code_compact` uses its built-in readiness behavior.
+  Readiness failures are classified distinctly:
+  - `SWARM_RESUME_TIMEOUT`: the child did not publish same-fence presence
+    within the budget; output includes the actual budget, `launch=...ms,
+wait=...ms` timing split, bounded stderr, and — when process exit could not
+    be confirmed — the pending `startup_cleanup` operation id (`op=<id>`).
+  - Early process exit: reports `process exited (code=..., signal=...)` (not
+    `SWARM_RESUME_TIMEOUT`) with bounded stderr.
+  - `SWARM_RESUME_NOT_ALLOWED`: the member's state does not allow resume (e.g.
+    `attached`, `left`, `headless`), or a prior failed start left an unresolved
+    `startup_cleanup` operation. Confirm the old process tree exited with
+    `codely swarm worker stop --team <team> --operation <id> --force` before resuming again
+    so two live workers never share the same workspace. If startup cleanup
+    lost the process tree before it could bind its descendants, a missing root
+    PID alone leaves resume and release blocked. `worker status --json` shows
+    the operation and its exit evidence.
 - Resume only promises the restore scope a backend actually verified. The
   native Codely session and the external carriers' structured session ids
   (`session-mismatch` / `missing-session-id` fail closed) are covered; a
@@ -356,17 +396,18 @@ boundaries rather than reporting them as passed.
   automatically restarted by sending, or treat idle as task completion.
 - For a steer, retain the returned `messageId` and mailbox sequence together with
   the team, target member, tenure and generation. The send receipt proves durable
-  mailbox acceptance only. Verify the matching message_committed and
+  mailbox acceptance only. Verify the matching `message_committed` and
   `message_acked` journal facts, following `nextCursor` for pagination and expanding
   their canonical message references as needed. Match both messageId and mailbox
   sequence to the `mailbox_message` reference; the journal cursor sequence is a
   separate sequence space. Check receiver fence identity and, when needed, the
-  canonical conversation record referenced by the ACK. Matching journal facts
-  are positive evidence; missing facts are inconclusive because the canonical
-  transcript or ACK write can outlive a missing journal append. Use the
-  installed version's read-only exact transcript/ACK lookup. If none is exposed,
-  mark consumption unknown and request a correlated task/result receipt instead
-  of inferring failure from an absent journal row or empty mailbox.
+  canonical conversation record referenced by the ACK.
+- Matching journal facts are positive evidence; missing facts are inconclusive.
+  A canonical transcript or ACK write may succeed while its subsequent journal
+  fact is absent. Use the installed version's read-only exact transcript/ACK
+  lookup when that happens. If none is available, report consumption as unknown
+  and request a correlated task/result receipt; do not infer failure from an
+  absent journal row or empty mailbox.
 - A durable ACK proves the message reached that receiver's canonical session.
   If that exact ACK has `turnEndedAt`, the model turn carrying the steer ended.
   Neither proves requested work is done. For actionable steers, ask for a result
@@ -390,6 +431,61 @@ boundaries rather than reporting them as passed.
   serialize overlapping edits and heavy build/format operations.
 
 ## Recovery and evidence
+
+### Terminal interactive leader re-entry (`codely swarm attach --team <team>`)
+
+Terminal interactive re-entry uses `codely swarm attach --team <team>`, while
+ACP clients recover a leader session through `session/load` with the canonical
+binding or trusted `_meta.codely.swarmRecovery` locator. Both keep the same
+leader member, tenure, mailbox and canonical JSONL transcript, and never fork a
+second history authority. Do not substitute `--resume-session` (ordinary
+history without Swarm leader attachment) or `worker resume` (background
+headless mode) when the user wants to return to interactive leader chat.
+
+- **Stopped or stale leader**: validates workspace containment and canonical
+  transcript ownership, claims the OS conversation lock and bumps the leader
+  generation atomically before restoring committed ACK state and hydrating the
+  interactive Ink chat history.
+- **Background leader**: performs a cooperative stop (`release: false`, never
+  `--force`) and requires confirmed process exit before resuming and re-reading
+  the final flushed transcript, so concurrent attaches yield a single writer
+  and pending inbox messages are neither lost nor duplicated.
+- **Live interactive or remote owner / unrecoverable state**: fails closed with
+  actionable guidance (including PID when known) without signalling the live
+  terminal, without forking, and without mutating durable member state.
+
+### Legacy ACP session without a canonical binding
+
+A legacy ACP session with no canonical `resumeMetadata.swarmBindingV1` is not
+recovered by scanning teams or guessing a member. `session/load` accepts one
+explicit trusted locator, `_meta.codely.swarmRecovery={teamId,memberId}`, and
+only when that pair comes from a deployment receipt or an operator choice. A
+missing, malformed, or non-UUID hint fails closed (`recovery_required`) and
+does not select a team. When a canonical binding is present, a hint that names
+a different team or member is rejected.
+
+Before the cold load, close and verify the exact old ACP host process tree
+with the same pid and birth evidence a worker stop uses. Do not edit or delete
+conversation lock files to force the load. The legacy conversation owner
+treats a held lock as stale only after 30 seconds (`stale: 30_000`, refreshed
+every 10 seconds). If the claim is still held, retry the same session id and
+the same `swarmRecovery` hint after that window, once the old process is gone.
+`session/load` refuses a live owner; it does not fork a new transcript.
+`session/new` is the only path that may fork, and it is not leader recovery.
+
+Session load and leader recovery are different acceptance checks:
+
+- Session load claims the conversation lease and reads that transcript. By
+  itself it does not bump a generation or settle a stop.
+- Leader recovery runs only after that lease is held, for the exact team and
+  member named by the canonical binding or the trusted hint. It keeps the same
+  tenure and the same conversation session, stops the previous leader state
+  when it is not already stopped, and bumps the generation exactly once.
+- A heartbeat or stop for the previous fence is rejected. The old operation
+  cannot target the new generation.
+- The mailbox stays on the member id. Pending messages remain for that
+  recovered session and are acknowledged once; recovery does not copy them
+  into a second session or replay an already acked message.
 
 ### Remote credentials and bounded monitoring
 

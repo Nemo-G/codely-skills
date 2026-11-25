@@ -1,8 +1,9 @@
-# Explicit headless members
+# Local headless and remote on-demand members
 
-Use this reference for a new local member whose process should run one ready
-work unit and exit normally. Existing persistent members keep their current
-behavior and commands. First discover the installed surface:
+Local headless runs one ready work unit per explicit activation. A remote
+on-demand host polls the Gateway and starts one agent per accepted Chart
+assignment.
+Check the installed commands and capabilities before admitting work.
 
 ```text
 codely swarm headless --help
@@ -10,19 +11,18 @@ codely swarm headless prepare --help
 codely swarm headless activate --help
 codely swarm headless status --help
 codely swarm capabilities --team <team> --json
+codely serve web-ui --help
 ```
 
 If the installed version lacks these commands, report that capability gap.
 Do not invent flags, edit member JSON, or emulate normal completion with stop.
-The capability result's `execution.headless` describes version and support:
-`activation: "explicit"` and `automaticActivation: false` are intentional.
-Local Codely support does not imply native-context, remote or external-CLI
-support. `supportedPlatforms` is currently `darwin` and `linux`; Windows
-prepare/activate rejects before member registration, generation reservation or
-child spawn. Status remains readable for diagnosis. Check the installed values
-before admitting work.
+`execution.headless.localCodely` reports local support on the current host.
+`supportedPlatforms` lists `darwin`, `linux` and `win32` for this build.
+`activation: "explicit"` and `automaticActivation: false` describe local
+activation. `remote: true` advertises the attached on-demand host. The
+capability record reports `nativeContext: false` and `externalCli: false`.
 
-## Prepare and explicitly activate
+## Prepare and explicitly activate a local member
 
 1. Reuse an authorized existing team and choose a new member name. The existing
    `swarm create` command attaches its controller session; it is not a service
@@ -59,12 +59,7 @@ before admitting work.
    prepare a replacement, call the persistent `worker resume`, or fresh-fallback
    when history cannot be restored.
 
-The first slice supports local Codely execution. Unsupported launch or recovery
-combinations fail explicitly; an external CLI name or a remote URL does not
-make them supported. Native-context recovery requires a different host and is
-not supplied by this entry. Follow the installed validation result.
-
-## Completion and failure
+## Verify local completion and recover from interruption
 
 Normal completion commits the selected work, joins its required BG/finalization,
 checks recording and ACK/result durability, releases resources and exits.
@@ -72,18 +67,54 @@ No normal-success stop/leave or cleanup finalizer is required. Keep identity,
 history and results; do not delete the member after each invocation.
 
 An activation response, PID disappearance, model `end_turn`, or a textual
-success claim alone is not a business result. Read the execution outcome and
+success claim alone is not a business result. `end_turn` while task-owned
+background work is still active keeps the claimed workflow owner and waits for
+the existing completion notification; it does not fail the task and it does not
+rerun the child. With no such background work, missing `swarm_task complete`
+proof still fails closed. Read the execution outcome and
 the corresponding durable work fact. Failed/cancelled/uncertain activation,
 operator-stop, corrupt history, or an unconfirmed old process requires
 diagnosis/reconciliation; this slice does not blindly retry it. Report the
 reason without changing member JSON or converting the member to persistent.
 
-## Who drives the next activation?
+On interruption, the activation host requests cancellation and verifies exit
+of the root and managed descendants against their process birth identities.
+If exit is unresolved, a new activation is refused. Continue the same durable
+stop operation on the executing host with
+`codely swarm worker stop --team <team> --operation <id> --force`.
+If no operation exists, target the member with
+`codely swarm worker stop --team <team> --member <name> --force`.
+A verified local stop receipt for that generation with complete process-tree
+coverage allows a subsequent explicit activation of the same eligible member
+when the tenure is retained and its canonical session is resumable.
 
 An attended controller can explicitly activate A, observe its terminal outcome,
-then explicitly activate B without Control-plane. Ending a model turn does not
-create an activation driver. For unattended DAG advancement, a persistent
-driver must implement the headless activation contract; automatic Control-plane
-activation is a later #136 capability, not present merely because monitoring
-ticks advance. Do not use browser polling or an LLM sleep/status loop as a
-replacement scheduler.
+then explicitly activate B without Control-plane. Each dormant local member
+requires a caller to activate it. Control-plane supplies monitoring and
+notifications for these members.
+
+## Serve an attached remote member on demand
+
+Use this path for Gateway-ready Chart nodes bound to the joined member.
+Mailbox work can be accepted without an assignment and does not start an ACP
+agent. Ordinary shared tasks in the same team can enter the assignment
+candidate set when they are unbound. The Gateway can record an ordinary claim
+and then refuse its execution token with `REMOTE_SWARM_ASSIGNMENT_STALE`,
+which stops the host from taking work. Keep ordinary shared tasks in a
+separate team or use persistent workers for a mixed backlog.
+
+Use an already joined member and its Gateway-issued token and membership
+identity JSON. The host reads both from environment variables. Pass the
+variable names and the HTTPS Gateway URL. HTTP is available for loopback.
+
+```text
+codely serve web-ui --swarm-on-demand --swarm-url <gateway-url> --swarm-token-env <token-variable> --swarm-identity-env <identity-variable>
+```
+
+The host sends membership heartbeats and polls for assignments while idle,
+with zero ACP agent processes. Each accepted assignment starts an agent and a
+new ACP session under the existing member identity. The host checks durable
+assignment completion, closes the agent and confirms the managed process tree
+has exited before polling for the next assignment. If tree exit is unresolved,
+the host stops taking work. Check the assignment's durable result and the
+host's `settled` event with confirmed tree exit before reporting both outcomes.

@@ -68,6 +68,8 @@ Swarm status is a standalone command, not a headless slash command:
 
 ```powershell
 codely swarm status --team <team> --limit 20
+codely swarm task list --team <team> [--include-completed] [--cursor <cursor>] [--limit <n>] [--json]
+codely swarm task status --team <team> --task-id <taskId> [--json]
 codely swarm events --team <team> --limit 50 --json
 codely swarm events --team <team> --after <journalId>:<sequence> --expand --json
 ```
@@ -150,14 +152,16 @@ codely swarm workflow examples --json
 codely swarm workflow validate --file <file> --json
 codely swarm workflow plan --team <team> --file <file> --json
 codely swarm workflow list --team <team> [--cursor <cursor>] [--limit <n>] [--json]
-codely swarm workflow run|status|pause|resume|cancel|retry …
+codely swarm workflow status --team <team> --run-id <runId> [--json]
+codely swarm workflow run|pause|resume|cancel|retry …
 codely swarm workflow dashboard --team <team> --file <file> --run-id <id> --output <file> [--port 0] [--no-serve]
 codely swarm template save --chart-file <file> [--name <name>] [--description <text>] [--force] [--json]
 codely swarm template list [--json]
 codely swarm template show <name> [--json]
 codely swarm template instantiate <name> [--inputs <file.json>] [--json]
 codely swarm template run <name> --team <team> --run-id <uuid> [--inputs <file.json>] [--json]
-codely swarm create|join|list|status|send|stop|worker …
+codely swarm task list|status --team <team> …
+codely swarm create|join|attach|list|status|task|send|stop|worker …
 ```
 
 - `template instantiate` returns the exact definition (and member launch
@@ -176,6 +180,11 @@ codely swarm create|join|list|status|send|stop|worker …
   `nextCursor` for one team only (default page 50, maximum 100). It is read-only,
   works out of session, and never needs a Control-plane. Feed a listed `runId`
   to the existing `workflow status`; do not derive a run id from a hash.
+- `workflow status --team <team> --run-id <runId> [--json]` projects each node's
+  settlement status, `taskId`, committed result (`committedRecordId` plus a
+  bounded output summary, or bounded structured output with `--json`), and
+  same-run `inputsFrom` lineage (`sourceNodeId`, `sourceRunId` and verified
+  `sourceCommittedRecordId`).
 
 ## 7. Suggested explore order for this skill
 
@@ -186,7 +195,9 @@ codely swarm create|join|list|status|send|stop|worker …
 
 5. Author JSON → `validate` → `plan` → `run`
 6. Reuse: `swarm list`/`status` → `workflow list` → `workflow status`, then
-   `worker status|resume|prepare` for each member. These CLI operations do not
+   `worker status|resume|prepare` (background headless mode for `worker resume`)
+   or `codely swarm attach --team <team>` to return to the team's interactive
+   leader chat. These CLI operations do not
    technically need Control-plane; execution still follows
    [the monitoring decision](../SKILL.md#decide-whether-control-plane-is-required).
 

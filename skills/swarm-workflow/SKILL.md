@@ -1,13 +1,10 @@
 ---
 name: swarm-workflow
 description: >-
-  Organize Codely agent teams and optional Swarm WorkflowDefinition runs from
-  natural-language goals, roles and constraints. Use for teammate collaboration,
-  role-based collaboration, durable charts, editable per-team DAG HTML,
-  live Chart file editing, multi-checkpoint delivery, or agent
-  systems built on Swarm and Control-plane.
-  Prefer this over inventing a parallel planner: explore Codely cmdarg/--cmd and
-  `codely swarm workflow` as ground truth (N1 = same format + same run path).
+  Organize Codely agent teams from natural-language goals, roles and constraints.
+  Covers flexible team collaboration through messages and shared tasks, and
+  Chart-based WorkflowDefinition runs for declared dependencies, structured
+  result handoff, editable DAGs and multi-checkpoint delivery.
 ---
 
 # Swarm Workflow (N1)
@@ -23,22 +20,153 @@ an application-specific slash command.
 
 Accept a short request naming the goal, roles, models and constraints. Own the
 discovery and execution procedure; do not ask the user to supply a tool manual.
-For ordinary team collaboration use existing membership, worker, mailbox and
-shared-task tools without requiring a Chart. For ordered work or bounded repair
-loops, author a `WorkflowDefinition` and use the same durable execution path as
-a hand-written chart. **Never guess** model ids, auth, tools or chart fields.
+**Never guess** model ids, auth, tools or chart fields.
+
+## Choose how to dispatch work
+
+Flexible collaboration uses team messages and shared tasks. A Workflow declares
+steps in a saved Chart (`WorkflowDefinition`). Each admitted run has a durable
+`runId`. Preserve the user's choice. When it is open, suggest an option based
+on the handoff, tracking and execution behavior the task calls for.
+
+For example, `reader` reads README and `reviewer` verifies the findings.
+
+| Mode | Scenario | Dispatch and evidence |
+| --- | --- | --- |
+| Flexible | Named recipients coordinate the handoff directly. | Send `work` with `swarm_send` to a persistent member or explicitly activate a local headless recipient after sending. The receipt confirms mailbox acceptance. Check consumption through `swarm events` and completion through the reviewer's `result` reply. |
+| Flexible | The team needs a shared backlog with owners and claim ordering. | Create shared tasks with `swarm_task` for persistent workers and use `blocked_by` to gate claiming. Agree where to read the summary. Query ownership, blockers and completion by `task_id` with `swarm_task status` or `codely swarm task status`. |
+| Workflow | The team needs a repeatable run with declared ordering and same-run structured output handoff. | Define `dependsOn` and `inputsFrom` in the Chart. Query node settlement, committed results and input lineage by `runId` with `codely swarm workflow status`. |
+
+## Query team state from an external agent
+
+An agent already joined to the team can query the same durable facts through the
+existing Gateway MCP endpoint (`/v1/swarm/mcp`) with its own member bearer token.
+No team id or member id is supplied in the arguments: the token fixes the team
+scope and is checked against current membership on every call.
+
+| Tool | What it reads |
+| --- | --- |
+| `team_status` | Token team identity, caller role/state and the names of the available queries. |
+| `members_list` | Bounded member page: id, name, optional duty description, state and last heartbeat. |
+| `tasks_list` | Bounded task page: durable `status`, recorded `workflowStatus` when that field exists, owner, declared `blockedBy` dependencies, ordinary/Chart kind and whether result evidence exists. |
+| `task_get` | One task by id: the same status fields, plus a committed result and artifact references when present. Missing evidence is explicit. |
+
+Follow `nextCursor` until it is null to cover the whole list. A page states its
+own limit, count and `partial` flag. `page.partial` is true only when this
+read's store diagnostics skipped an unreadable record. The page still returns
+the readable entries and the cursor. Diagnostics from an earlier request or
+another team do not make this page partial, and a partial empty page is not a
+healthy empty team. Heartbeat time is not task progress, and a committed result
+is not review approval. `blockedBy` is the declared dependency list; judge
+whether the task is currently blocked by checking those tasks' status. `status`
+stays the durable task status. `workflowStatus` is returned only when the
+record has that field, so a failed ordinary task can stay `status: pending`
+with `workflowStatus: failed`. A missing `workflowStatus` is reported as
+missing and is not inferred to be a legacy Chart. Chart association stays on
+the Chart record. Artifact evidence is `present` only when the committed
+result contains at least one artifact reference. An empty artifact list still
+keeps `committedRecordId` and does not report artifacts present. Missing
+results, undeclared artifacts and legacy Chart records are reported as facts
+rather than inferred. Each response declares a bounded consistency scope:
+fields come from the records read for that answer,
+and cross-record summaries or pages may span different write moments. Re-read
+before making a decision. These queries never claim, settle, reconcile or
+acknowledge anything; task writes and agreements are separate capabilities.
+
+## Deliver ordinary work through MCP
+
+Use the joined member's Gateway connection and check the advertised tools.
+Both native `swarm_task` and external members work on the same ordinary task.
+
+1. Create it with `task_create`, supplying a subject, a description and a
+   stable `requestId`. Keep the returned `taskId` for the other member.
+2. The worker calls `task_claim` with that ID. Save the returned `taskId`,
+   `taskSequence`, `workflowRunId`, `workflowTurnId` and
+   `workflowTurnSequence`. These five fields identify this specific claim.
+3. Call `task_complete` with those fields, a stable delivery `requestId`
+   and the result. If a response is lost, retry with the same request ID and
+   payload. With `task_get`, read the ordinary delivery's `committedRecordId`
+   at `ordinary.committedRecordId` and its declared artifact at `ordinary.artifact`.
+4. After processing an item from `messages_read`, call
+   `messages_ack({messageId: item.id, sequence: item.sequence})`. The
+   `messages_ack` receipt confirms
+   consumption of that message. A Chart assignee settles its node separately
+   with `result_submit` and the assignment's own proof.
+
+## Read and publish team guidance
+
+On joining the team, resuming a session or returning from context compaction,
+read the team's `guidanceVersion` from status. Version zero means the team
+has no published guidance. For a positive version, fetch the full text with
+the native `swarm_manage` action `get_guidance` or Gateway MCP
+`team_guidance_get`. Keep the returned version with the text. On later status
+checks, refresh the text when the version changes.
+
+Members may propose guidance. The native leader publishes only after the
+user explicitly confirms the exact text to save or update in the leader chat.
+Call `publish_guidance` with that `text` and the `expected_version` read
+from the team. If another publication wins first, read the new version and
+reconfirm the proposed update. Report the version actually saved.
+The guidance is advisory. A change in review
+instructions applies to subsequent work; record any change to an in-flight
+task explicitly. Retain the delivery and review references already committed.
+
+## Review a versioned ordinary delivery
+
+Read the current team guidance and agree whether this task calls for direct
+delivery or independent review. For **direct delivery**, the holder completes
+the task and the leader reports the committed delivery. For a review, use
+separate ordinary tasks so each decision has its own holder and receipt.
+
+1. **Deliver v1.** The implementer completes the work task with the artifact's
+   `repository`, `path`, immutable `revision` and SHA-256 of its actual bytes.
+   Native `swarm_task complete` can return `settlementPending`. Wait for
+   settlement, then call native `status` with `task_id` and read
+   `delivery.committedRecordId`. With MCP read `ordinary.committedRecordId`
+   from `task_get`. Keep the task ID and the committed record ID together.
+   Use this readback for each delivery and review before reporting its outcome.
+2. **Review v1.** Assign a review task to another member. The reviewer reads
+   the delivered task and verifies that version of the artifact. With MCP,
+   `task_get` supplies `taskId`, `sequence` and `ordinary.artifact`.
+   In the reviewer's own `task_complete`, set `referencedTask.taskId` to that
+   work task and `referencedTask.taskSequence` to its `sequence`. Use the
+   reviewer's *own* claim fields at the top level. In native `swarm_task`,
+   the corresponding delivery field is `delivery.referenced_task` with
+   `task_id` and `task_sequence`. Report the verdict, reviewed revision and
+   digest in the review's summary.
+3. **Rework v2.** If the reviewer requests changes, record the review task's
+   ID and `committedRecordId` in the rework task description. Cite that
+   review in the rework delivery, with the v2 artifact revision and digest.
+   Open a new review task and cite the v2 **work task** in its receipt.
+   Preserve the earlier v1 delivery and decision. Report approval only after
+   the review receipt identifies the same task and artifact version.
+4. **Recover the leader's view.** Use `codely swarm attach --team <team>` for
+   a terminal leader or ACP `session/load` for the existing bound session.
+   Read the current tasks by ID. Use native `status.owner` or MCP
+   `ownerMemberId` to identify the holder. Report the artifact revision,
+   referenced work task and committed review decision. A separate direct
+   delivery has only its delivery receipt.
+
+A Chart reviewer may cite an ordinary investigation's task and receipt in
+its result. The Chart assignee still completes the admitted node through its
+original assignment and attempt. A Gateway assignee uses `result_submit`.
 
 ## Choose the member execution mode
 
-Existing `swarm worker` members retain their persistent execution behavior.
-Use the separate `swarm headless` surface only when the user requests explicit
-on-demand execution: register a member without a process, activate one ready
-work unit, then let that instance finish and exit normally. The member and its
-canonical session remain available for the next explicit activation.
-Discover `codely swarm headless --help` first and read
-[headless-members.md](references/headless-members.md). Do not simulate this mode
-with a persistent worker plus a normal-success `stop`, or convert an existing
-member. Headless is an execution lifecycle, not a model/executor selection.
+Member execution mode describes how work gets a process. Match it to the
+dispatch path.
+
+- Persistent `swarm worker` members keep a running worker between assignments.
+- Local `swarm headless` registers a member without a process. A caller
+  explicitly activates one ready unit at a time. The member and canonical
+  session carry over to the next activation.
+- Remote `serve web-ui --swarm-on-demand` starts one ACP agent per accepted
+  assignment for Gateway-ready Chart nodes bound to the attached member.
+  Mailbox work does not start the agent. Keep ordinary shared tasks out of a
+  team with this host because unbound tasks can be offered to it.
+
+See [headless-members.md](references/headless-members.md) for discovery,
+verification and recovery for both on-demand paths.
 
 When the user asks for a clickable team DAG, live HTML, Raw Chart editing or
 interactive node configuration, read [live-chart-editing.md](references/live-chart-editing.md).
@@ -74,13 +202,11 @@ controller process remains attached is not the same as losing that controller.
 If these conditions cannot be established, use Control-plane. Reuse an existing
 healthy instance for the root even when starting a separate one is unnecessary.
 
-Explicit, attended headless activations are also allowed without Control-plane:
-the caller waits for each activation's terminal outcome and explicitly starts
-the next one. Restoring the same completed member/session for a second such
-activation does not by itself require unattended recovery. An inactive member
-does not wake itself. The current headless surface does not implement
-Control-plane automatic DAG activation; a running monitor is not evidence that
-headless successors will start. Do not promise unattended headless execution.
+An attended caller can run local `swarm headless activate` without
+Control-plane, wait for the outcome and explicitly start the next unit.
+Control-plane does not activate dormant local members. A running remote
+on-demand host independently polls the Gateway for Chart assignments bound
+to its attached member.
 
 When the decision above requires coverage, reuse or start the monitor before
 admitting work and verify three things: its JSON health response, that
@@ -110,6 +236,10 @@ After admission, edit the same source through the public Apply operation describ
 in the live-editing reference. It validates and writes the actual file, updates
 unclaimed work, and retains the original snapshot of already-owned attempts.
 Saving a JSON file directly is not proof that admitted tasks adopted its changes.
+
+A claimed workflow task stays with its exact owner when the model ends the turn while task-owned background work is still active. `waiting-background` is derived from that claim plus the worker's canonical background activity; it is not a second task status or scheduler. The same member session continues when the existing background completion notification arrives, and exactly one fenced `swarm_task complete` settles the task. Do not rerun the child or replay a committed result. Ending the turn with no task-owned background work and no completion proof still fails closed (`SWARM_TASK_COMPLETION_PROOF_MISSING`). Explicit cancel, stop, a stale fence, background failure, and process crash also stay fail-closed and must not become a later success.
+
+An unattended leader discloses the carrier that is actually attached (for example ACP) and states that this carrier is not a member executor. It does not call `ask_user`. Parent decisions arrive only through the verified task-owned revisioned command channel. When that channel is unavailable, record a durable `needs_human` result instead of a private prompt.
 
 For persistent execution, after confirming workers are ready, the run is admitted, and required
 Control-plane visibility is verified, report its identity and monitor URL
@@ -157,7 +287,7 @@ accepted. It does not prove that the recipient session has consumed the message
 or started the requested work.
 
 Verify the exact message through the per-team journal, paging from the returned
-nextCursor and expanding canonical references when needed:
+`nextCursor` and expanding canonical references when needed:
 
     codely swarm events --team <team> --member-id <targetMemberId> --limit 50 --json
     codely swarm events --team <team> --member-id <targetMemberId> --after <journalId:cursorSequence> --limit 50 --expand --json
@@ -167,15 +297,8 @@ Match evidence references to both the mailbox message ID and its sequence; check
 the receiver member/tenure/generation on the committed and ACK facts. Read the
 canonical recipient conversation record when the ACK reference needs
 verification. An ACK proves the message was committed to the recipient's
-canonical session. If that same ACK carries turnEndedAt, the model turn carrying
+canonical session. If that same ACK carries `turnEndedAt`, the model turn carrying
 the steer also ended. Neither fact proves the requested task completed.
-
-Treat a matching journal fact as positive evidence. A missing fact is
-inconclusive: the canonical conversation or ACK write can succeed while its
-subsequent journal fact is absent. In that case, use the installed version's
-read-only exact transcript/ACK lookup. If no such lookup is exposed, report
-consumption as unknown and request a correlated task or result receipt; do not
-infer failure from a missing journal row or an empty mailbox.
 
 For actionable steers, ask the leader to report against the original `messageId`
 and mailbox sequence. If the sender is a team member, the leader can return a
@@ -191,11 +314,17 @@ The labels below are a requested reply convention, not automatic Swarm states:
 Verify progress and completion against `swarm_task` or `swarm workflow status` and
 the durable result. Use the sender's supported return channel for that report;
 a detached external CLI or outer chat is not implicitly woken by a mailbox ACK.
+Treat a matching journal fact as positive evidence. A missing fact is
+inconclusive: the canonical conversation or ACK write can succeed while its
+subsequent journal fact is absent. In that case, use the installed version's
+read-only exact transcript/ACK lookup. If no such lookup is exposed, report
+consumption as unknown and request a correlated task or result receipt; do not
+infer failure from a missing journal row or an empty mailbox.
 If only accepted or committed is proven, report that phase and leave consumption
-pending or unknown until exact recipient evidence is available.
-An empty inbox, an idle member or a local coordinator log does not prove
-consumption. Do not resend the steer or create a duplicate task until its
-possible existing side effects have been checked.
+pending or unknown until exact recipient evidence is available. An empty inbox,
+an idle member or a local coordinator log does not prove consumption. Do not
+resend the steer or create a duplicate task until its possible existing side
+effects have been checked.
 
 When a run is not terminal, still has pending tasks and no task of it is
 running, the same inspection tick delivers at most one bounded, fact-only
@@ -328,7 +457,13 @@ When the user asks for a reusable workflow, or asks to save one:
    immediately, leaving a stopped leader your session was never attached to.
    Use `codely swarm create --team <name> --member <member> --description "<purpose>"`
    only when the user explicitly wants to launch a standalone interactive
-   member session in a real terminal and keep that process running.
+   member session in a real terminal and keep that process running. After
+   exiting an interactive leader terminal, return to the original leader chat
+   with `codely swarm attach --team <team>` (using only the team name): it
+   restores the original leader identity, mailbox and canonical JSONL history
+   instead of running `worker resume` (which starts a background headless
+   worker) or `--resume-session` (which only loads ordinary history without
+   Swarm leader identity).
    Team purpose is persisted metadata, separate from a Chart template
    description and from any member's business role.
 6. Prepare members with the launch the run itself will execute, whenever the
@@ -386,17 +521,21 @@ Then follow this order:
    Chart; open one with `codely swarm workflow status --team <team> --run-id
 <runId>`. One Chart may have several runs — never pick "the" run by
    `definitionHash` alone.
-3. Judge members, not just `plan.runnable`: a healthy member with the same
-   launch is reused; `stopped`/`stale` is resumed; a missing member is
-   spawned/prepared. `plan.runnable` is a roster check, not worker readiness.
+3. Check the member's execution mode and readiness. For persistent workers,
+   reuse a healthy matching launch, resume eligible `stopped`/`stale`
+   members, or prepare missing members. For on-demand members, follow
+   [headless-members.md](references/headless-members.md). `plan.runnable`
+   checks the roster and launch bindings.
 4. To change a launch/model/executor, stop the old work first and use the
    existing release → prepare/spawn order; the old binding is never
    overwritten in place. An old run that must be kept is not cancelled
    automatically.
 5. Re-running the same or an edited definition always uses a **new runId**
    (`validate` → `plan` → `run`); only recovery of the same execution reuses the
-   original `runId` and its admission (`resume`/`retry`). A new runId is not a
-   new worker conversation: reused/resumed members continue their session.
+   original `runId` and its admission (`resume`/`retry`). Session continuity
+   follows the execution mode. Persistent workers can reuse their session,
+   local headless reuses its canonical session across activations, and remote
+   on-demand opens a new ACP session per assignment.
 6. Report the source file, `definitionHash`, `runId`, and the actual
    claim/result. A written file, a `ready` member or an admission is not
    completion.
@@ -412,7 +551,7 @@ Then follow this order:
 - Apply the explicit Control-plane decision above before admission. If required
   coverage is unavailable, keep new work out of admission, report the gap and
   restore observation; do not invent an HTTP scheduling endpoint.
-- Team/worker tools need `--experimental-swarm` (or `swarm create|join|worker`);
+- Team/worker tools need `--experimental-swarm` (or `swarm create|join|attach|worker`);
   one-shot `codely swarm workflow …` does not.
 - Prefer `workflow` over deprecated `chart` alias.
 
@@ -440,6 +579,12 @@ Discover supported schema fields before translating a conditional plan.
   a string. `inputsFrom` is not automatic command argument/environment binding.
   Pass the task's frozen input file explicitly and choose `command.timeoutMs`;
   omitting it currently inherits a 30-second process deadline, not infinity.
+- An omitted or unset member turn timeout is unlimited.
+- Only an explicit positive integer narrows the member-turn budget.
+- Command, preScript and tool timeouts are independent.
+- Reconcile uncertain effects before retry. For a wedged unlimited turn, check
+  whether pause/cancel requested active-turn control, or verify exit through
+  the worker stop operation. Set `launch.turnTimeoutMs` for a finite budget.
 - Store model/auth/effort only in launch args/env. An external CLI uses the
   schema's `external-cli` executor and its verified entry/args. Do not append
   Codely membership flags to the external CLI.

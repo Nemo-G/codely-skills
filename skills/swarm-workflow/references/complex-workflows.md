@@ -120,6 +120,7 @@ that limitation instead of silently splitting the work.
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Missing skill                                | Verify Swarm and skills are enabled; inspect `/skills` catalog; do not invent a `swarm-workflow` CLI command                  |
 | Unknown chart key                            | Re-read `workflow schema --json`, repair the source definition, validate again                                                |
+| `resultSchema` cannot be executed            | `workflow validate` reports the node, field path and failing keyword. Fix the schema, then validate again.                     |
 | `plan` not runnable                          | Inspect missing members and prepared launches; do not fabricate roster rows                                                   |
 | Member attached but work remains pending     | Check worker readiness, ownership and dependencies; attached alone is insufficient                                            |
 | Launch conflict                              | Inspect open work, stop/release only the old owned tenure, then prepare; never overwrite its frozen launch                    |
@@ -145,8 +146,9 @@ codely swarm workflow cancel --team <team> --run-id <run> --operation-id <uuid>
 codely swarm workflow retry --team <team> --run-id <run>
 ```
 
-Pause/cancel can request control of active turns; they are not guaranteed to let
-all running commands finish. Inspect the returned counts/conflicts and subsequent
+Pause/cancel can request control of active turns. When the leader is stopped,
+`workflow cancel` cancels pending work and returns `activeRequested: 0` while
+active peers keep running. Inspect returned counts, conflicts and subsequent
 settlement. Retry/resume are run-wide: do not assume an unsupported `--issue` or
 `--node` selector. Application-level “pause between phases” is a separate adapter
 behavior and must be named as such. Uncertain external effects require
