@@ -6,6 +6,10 @@ Version 2.0. The upstream repository LICENSE is reproduced in LICENSE.
 
 Source snapshot: 4252ea2eb3e9fab601f2a2915dddc29c85f71656
 Source directory: packages/core/src/skills/builtin/swarm-workflow
+Lane E Class-B clarity: Fixed/Flexible front guidance and unattended YOLO
+spellings (-y vs --approval-mode yolo, Cursor --yolo/--force, Codex
+bypass); body matches the issue179-c5-c7 worktree skill after stripping
+host-specific allowedTools.
 
 The README and this distribution notice were added for standalone publication.
 The host-specific allowedTools frontmatter was omitted because third-party

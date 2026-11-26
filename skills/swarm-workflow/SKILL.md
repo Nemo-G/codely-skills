@@ -54,20 +54,24 @@ result and send those references back to the requesting session. Give the
 user `codely swarm attach --team <team-name>` for a terminal leader, or the
 ACP `session/load` identity and working directory, to reopen the same conversation.
 
-For “Bob must review every release”, declare the delivery, Bob's review,
-rework and publication dependencies in a Chart. Record the same `runId`
-for Bob returning v1, Alice delivering v2, Bob approving v2 and the
-publication that consumes that approval. Check that the v1 return left
-publication unexecuted. On re-entry, query the original `runId` with
-`swarm workflow status`. Follow a running Chart in place. If it is paused
-and continuation is authorized, resume the same `runId`. If admission has
-not happened yet, continue validating the saved Chart before dispatch.
-Report the admission error if it persists.
+For “Bob must review every release” (Fixed / Chart), declare the delivery,
+Bob's review, rework and publication dependencies in a Chart with
+`dependsOn` / `inputsFrom`. Record the same `runId` for Bob returning v1,
+Alice delivering v2, Bob approving v2 and the publication that consumes
+that approval. Check that the v1 return left publication unexecuted. On
+re-entry, query the original `runId` with `swarm workflow status`. Follow
+a running Chart in place. If it is paused and continuation is authorized,
+resume the same `runId`. If admission has not happened yet, continue
+validating the saved Chart before dispatch. Report the admission error if
+it persists. Return results through the original leader session.
 
-For “Alice may ask Bob”, follow [the ordinary review handoff](#review-a-versioned-ordinary-delivery).
-Alice decides whether to open a review. Give Alice and Bob the task ID and
-artifact revision to cite, and agree who will open any rework before dispatch.
-The leader reads the receipts when the requester returns.
+For “Alice may ask Bob” (Flexible / ordinary), follow
+[the ordinary review handoff](#review-a-versioned-ordinary-delivery).
+Members create the ordinary tasks. Alice decides whether to open a review
+for Bob. Bob returns the committed verdict to Alice; Alice opens the rework
+task and cites structured `referencedTask` evidence. The leader summarizes
+only from durable receipts when the requester returns; it does not create
+the routine review or rework tasks.
 
 Capture the path and digest of the skill the initiating client actually
 loaded. Retain Codely's `activate_skill` result or the Codex/Cursor file
@@ -88,6 +92,21 @@ For example, `reader` reads README and `reviewer` verifies the findings.
 | Flexible | Named recipients coordinate the handoff directly. | Send `work` with `swarm_send` to a persistent member or explicitly activate a local headless recipient after sending. The receipt confirms mailbox acceptance. Check consumption through `swarm events` and completion through the reviewer's `result` reply. |
 | Flexible | The team needs a shared backlog with owners and claim ordering. | Create shared tasks with `swarm_task` for persistent workers and use `blocked_by` to gate claiming. Agree where to read the summary. Query ownership, blockers and completion by `task_id` with `swarm_task status` or `codely swarm task status`. |
 | Workflow | The team needs a repeatable run with declared ordering and same-run structured output handoff. | Define `dependsOn` and `inputsFrom` in the Chart. Query node settlement, committed results and input lineage by `runId` with `codely swarm workflow status`. |
+
+### Unattended launch approvals
+
+Use each host's native YOLO-equivalent arguments, and keep the Codely
+carrier argv separate from any third-party child's native args:
+
+| Host | Unattended initiator / member spelling |
+| --- | --- |
+| Codely (interactive or ACP initiator) | `-y` only — never pass `-y` together with `--approval-mode` |
+| Codely persistent `swarm worker` | Persist and expect `--approval-mode yolo`; the launcher normalizes any `-y` / `--yolo` spelling to that form before spawn |
+| Cursor | `--yolo` (alias `--force`) |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` |
+
+Full worker-launch rules, including carrier vs external-cli separation, are
+in [team-execution.md](references/team-execution.md#worker-approval-contract).
 
 ## Query team state from an external agent
 
@@ -498,7 +517,8 @@ current session without adding model/auth overrides. Use a separate execution
 member only when the requested work needs one; do not assume this interactive
 controller is already a persistent worker. Execution members default to
 YOLO-equivalent tool approval using each CLI's own arguments, as specified in
-the team execution reference. This does not change the interactive controller's
+[Unattended launch approvals](#unattended-launch-approvals) and the team
+execution reference. This does not change the interactive controller's
 approval policy or authorize extra Git changes, publication or deployment.
 
 ## Reveal before authoring

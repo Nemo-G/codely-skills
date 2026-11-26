@@ -359,6 +359,14 @@ including third-party CLI workers. Use the selected CLI's native arguments:
 | Codex       | `--dangerously-bypass-approvals-and-sandbox` |
 | Claude Code | `--dangerously-skip-permissions`             |
 
+For a Codely interactive or ACP initiator session, `-y` is the short YOLO
+spelling. Never pass `-y` together with `--approval-mode`; the CLI rejects
+that combination (`Cannot use both --yolo (-y) and --approval-mode together`).
+Codely persistent `swarm worker` launch records persist `--approval-mode yolo`
+only: the worker launcher normalizes any `-y` / `--yolo` spelling to
+`--approval-mode yolo` before spawn so a frozen launch cannot collide with the
+forced mode.
+
 Persist these native arguments in `launch.args` when preparing the team or Chart.
 The Codely worker launcher also enforces its own approval mode; this only covers
 the Codely process, including the carrier of an external worker. The external
