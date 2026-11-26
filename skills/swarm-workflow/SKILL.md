@@ -5,6 +5,10 @@ description: >-
   Covers flexible team collaboration through messages and shared tasks, and
   Chart-based WorkflowDefinition runs for declared dependencies, structured
   result handoff, editable DAGs and multi-checkpoint delivery.
+allowedTools:
+  - run_shell_command
+  - write_file
+  - read_file
 ---
 
 # Swarm Workflow (N1)
