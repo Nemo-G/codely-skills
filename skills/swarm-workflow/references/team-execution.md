@@ -349,45 +349,23 @@ monitor URL/root/team/run identities, not just that port 4040 responds.
 
 ## Worker approval contract
 
-All execution members default to YOLO-equivalent unattended tool approval,
-including third-party CLI workers. Use the selected CLI's native arguments:
+Use the launch profile the operator has authorized for this task. Preserve
+its existing restrictions for the Codely carrier and each external member.
+Technical approval to run tools does not authorize a business decision such
+as publishing guidance or changing availability.
 
-| CLI         | Native worker arguments                      |
-| ----------- | -------------------------------------------- |
-| Codely      | `--approval-mode yolo`                       |
-| Cursor      | `--yolo` (alias `--force`)                   |
-| Codex       | `--dangerously-bypass-approvals-and-sandbox` |
-| Claude Code | `--dangerously-skip-permissions`             |
-
-For a Codely interactive or ACP initiator session, `-y` is the short YOLO
-spelling. Never pass `-y` together with `--approval-mode`; the CLI rejects
-that combination (`Cannot use both --yolo (-y) and --approval-mode together`).
-Codely persistent `swarm worker` launch records persist `--approval-mode yolo`
-only: the worker launcher normalizes any `-y` / `--yolo` spelling to
-`--approval-mode yolo` before spawn so a frozen launch cannot collide with the
-forced mode.
-
-Persist these native arguments in `launch.args` when preparing the team or Chart.
-The Codely worker launcher also enforces its own approval mode; this only covers
-the Codely process, including the carrier of an external worker. The external
-child needs its own native approval arguments. Never inject Codely's
-`--approval-mode`, `--experimental-swarm` or membership fence into that child.
-Keep the persisted launch arguments on resume; do not add a separate approval
-field or infer policy from model/provider or arbitrary wrapper names.
-
-Verify flags against the installed CLI's help/version. Cursor's `--print` alone
-is not YOLO; `--auto-review` may still ask. Codex `never` and Claude `dontAsk`
-can deny operations instead of asking, so they are not full YOLO equivalents.
-An explicit deny or enterprise restriction remains a visible failure; do not
-retry it indefinitely. The native flags do not replace a business `needs_human`
-gate and do not authorize extra Git or remote publication actions.
-
-Cursor and Codex flags were checked through local CLI help. The 2026-10-19
-acceptance also exercised real Cursor auto and Codex gpt-6-luna sessions with
-skill/MCP context, peer messages and canonical result submission. That attached
-worker evidence does not prove every managed carrier launch mode. Claude live
-acceptance and rollout were explicitly skipped for this scope; preserve those
-boundaries rather than reporting them as passed.
+If the authorized Codely profile uses YOLO, `-y` is the short spelling for an
+interactive or ACP initiator. Never pass `-y` together with `--approval-mode`;
+the CLI rejects that combination (`Cannot use both --yolo (-y) and --approval-mode together`).
+A persistent Codely `swarm worker` always sets `--approval-mode yolo` on its
+own process, normalizing existing approval arguments before spawn. Check
+that this worker mode fits the authorized profile. An external child uses
+its own profile. For authorized YOLO runs, Cursor Run Everything uses
+`--yolo` or `--force`, and Codex uses `--dangerously-bypass-approvals-and-sandbox`.
+Keep the approved arguments in the corresponding launch configuration across resume.
+Verify options with the installed CLI's help. Keep the carrier and external
+child arguments separate. An explicit denial remains a failure of that
+operation; report it and continue independent work when possible.
 
 ## Launch and communication semantics
 
@@ -559,9 +537,9 @@ actively joined members; do not equate the workflow run list with the full roste
 The stale-member inspection pass
 detects a verifiable incident (stale membership with active work, failed work,
 human-required pause), persists one stable attention fact and notifies the
-leader/coordinator. This inspection tick is not a workflow tick: stale-member
-inspection never starts or resumes a worker. Separately, the enabled idle-wake policy may call the
-worker launcher for an eligible parked local member. For unattended leader
+leader/coordinator. Stale-member inspection never starts or resumes a worker.
+A separate lifecycle pass in the same tick can resume eligible parked local
+workers under the enabled idle-wake policy. For unattended leader
 re-entry, verify the independently hosted recovery path in the
 [deployment recipe](agent-system-deployment.md#unattended-leader-and-member-recovery).
 The leader/coordinator inspects the durable task/member/run

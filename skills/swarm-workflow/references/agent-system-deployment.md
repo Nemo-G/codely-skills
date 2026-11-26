@@ -65,14 +65,12 @@ For an npm Node installation, a portable launch has this shape (replace values):
   "entry": "/absolute/path/to/node",
   "cwd": "/absolute/existing/worktree",
   "env": {},
-  "args": [
-    "/absolute/path/to/codely/bundle/gemini.js",
-    "--approval-mode",
-    "yolo"
-  ]
+  "args": ["/absolute/path/to/codely/bundle/gemini.js"]
 }
 ```
 
+For the effective persistent worker settings, see the
+[worker approval contract](team-execution.md#worker-approval-contract).
 Use actual Windows paths on Windows, or the installed standalone executable
 with no bundle argument. Do not launch a `.cmd`/`.bat` shim as a native executable;
 use its supported interpreter or Codely's installed worker launcher. Record PATH
@@ -245,8 +243,8 @@ Verify B's resulting process and delivery in the durable records below.
    mailbox state, then requests recovery of the member needed for pending work
    on its execution host. Recheck identity and the current management intent
    before launch.
-4. **Test the shipped skill.** After changing these instructions, build the
-   candidate and start a fresh isolated acceptance run from a natural-language
+4. **Validate automatic recovery in an isolated test team.** When testing the
+   crash-recovery contract, start an isolated run from a natural-language
    goal. Capture the actual `activate_skill` result or external client's file
    read, its path and SHA-256, the referenced recipe's digest, and the matching
    packaged files, source revision and CLI artifact digest. Establish one
@@ -258,8 +256,7 @@ Verify B's resulting process and delivery in the durable records below.
    original leader returns once, A retains one delivery, B has one effective
    instance and finishes its task, and C stays stopped with durable management
    intent `operator_stopped`. The stop operation's `cause: operator` records
-   who initiated the stop. Repeat this run if the delivered recovery
-   instructions change before sign-off.
+   who initiated the stop.
 
 For example, from PowerShell on the host that can reach the monitor (replace
 the IDs with the recorded values; these calls only read status):

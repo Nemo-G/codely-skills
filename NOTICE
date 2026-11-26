@@ -4,7 +4,7 @@ This distribution contains the swarm-workflow skill and its references and
 examples from the Codely CLI project, distributed under the Apache License,
 Version 2.0. The upstream repository LICENSE is reproduced in LICENSE.
 
-Source snapshot: 8fc331d2194a78b1fb79586ddac7dfa61fb88342
+Source snapshot: 4dca6184680ec750ce0bd80513a77d01340461fa
 Source directory: packages/core/src/skills/builtin/swarm-workflow
 
 The README and this distribution notice were added for standalone publication.

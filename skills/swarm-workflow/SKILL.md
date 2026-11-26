@@ -1,14 +1,10 @@
 ---
 name: swarm-workflow
 description: >-
-  Organize Codely agent teams from natural-language goals, roles and constraints.
-  Covers flexible team collaboration through messages and shared tasks, and
-  Chart-based WorkflowDefinition runs for declared dependencies, structured
-  result handoff, editable DAGs and multi-checkpoint delivery.
-allowedTools:
-  - run_shell_command
-  - write_file
-  - read_file
+  Use when organizing a Codely Swarm team. Choose Flexible when members
+  decide who acts next through messages and shared tasks. Choose a Workflow
+  (Fixed Chart) for declared dependencies, structured handoffs and a
+  repeatable run.
 ---
 
 # Swarm Workflow (N1)
@@ -28,9 +24,11 @@ discovery and execution procedure; do not ask the user to supply a tool manual.
 
 ## Return results to the requesting session
 
-In Codely, a leader chat can create the team in its own session. From Codex
-or Cursor, delegate to a native Codely leader through an ACP client that
-keeps its stdio connection open. For unattended work, use the
+In Codely, a leader chat can create the team in its own session. Codex and
+Cursor can inspect an existing team through the CLI. When the requester
+needs a continuing leader conversation, delegate to a native Codely leader
+through an ACP client that keeps its stdio connection open. For unattended
+leader recovery, use the
 [supervised leader host](references/agent-system-deployment.md#unattended-leader-and-member-recovery).
 Record the requesting session, its return channel, the ACP `sessionId` of
 the bound leader session, `teamId` and the managing leader member ID.
@@ -42,8 +40,9 @@ outer client has no leader session to dispatch from.
 
 For unattended work, verify the host's isolation and use the same account,
 workspace, state directory and tool policy for preflight and execution.
-Start the intended client, retain its successful `session/new` receipt, and
-read the team back in that session. Verify the first required operation
+For an ACP leader, retain the successful `session/new` receipt for a new
+session or `session/load` receipt for the existing session, and read the
+team back there. Verify the first required operation
 through the role that will perform it. Check the carrier and the external
 member separately, including the member's login, permitted workspace, tools
 and MCP access. After a restart, verify the same identity and permitted
@@ -59,12 +58,12 @@ user `codely swarm attach --team <team-name>` for a terminal leader, or the
 ACP `session/load` identity and working directory, to reopen the same conversation.
 
 For “Bob must review every release” (Fixed / Chart), declare the delivery,
-Bob's review, rework and publication dependencies in a Chart with
-`dependsOn` / `inputsFrom`. Record the same `runId` for Bob returning v1,
-Alice delivering v2, Bob approving v2 and the publication that consumes
-that approval. Check that the v1 return left publication unexecuted. On
-re-entry, query the original `runId` with `swarm workflow status`. Follow
-a running Chart in place. If it is paused and continuation is authorized,
+Bob's review and publication dependencies in a Chart with
+`dependsOn` / `inputsFrom`. If the first review passes, use its approval for
+publication. If Bob returns v1, leave publication unexecuted and record the
+same `runId` for Alice delivering v2, Bob approving v2 and publication.
+On re-entry, query the original `runId` with `swarm workflow status`
+and follow a running Chart in place. If it is paused and continuation is authorized,
 resume the same `runId`. If admission has not happened yet, continue
 validating the saved Chart before dispatch. Report the admission error if
 it persists. Return results through the original leader session.
@@ -72,13 +71,14 @@ it persists. Return results through the original leader session.
 For “Alice may ask Bob” (Flexible / ordinary), follow
 [the ordinary review handoff](#review-a-versioned-ordinary-delivery).
 Members create the ordinary tasks. Alice decides whether to open a review
-for Bob. Bob returns the committed verdict to Alice; Alice opens the rework
-task and cites structured `referencedTask` evidence. The leader summarizes
+for Bob. Bob returns the committed verdict to Alice. If changes are needed,
+Alice opens the rework task and cites structured `referencedTask` evidence.
+The leader summarizes
 only from durable receipts when the requester returns; it does not create
 the routine review or rework tasks.
 
-Capture the path and digest of the skill the initiating client actually
-loaded. Retain Codely's `activate_skill` result or the Codex/Cursor file
+When verifying a deployment, capture the path and digest of the skill the
+initiating client loaded. Retain Codely's `activate_skill` result or the Codex/Cursor file
 read of the deployed `swarm-workflow/SKILL.md`. For unattended recovery
 retain the linked recovery recipe's digest from the same installation.
 
@@ -99,18 +99,20 @@ For example, `reader` reads README and `reviewer` verifies the findings.
 
 ### Unattended launch approvals
 
-Use each host's native YOLO-equivalent arguments, and keep the Codely
-carrier argv separate from any third-party child's native args:
+Use the launch profile the operator has authorized for this task. Preserve
+its existing restrictions. Keep the Codely carrier's arguments separate from
+a third-party member's native arguments. Technical approval to run tools is
+separate from the user's business decision on guidance, availability or
+publication.
 
-| Host | Unattended initiator / member spelling |
-| --- | --- |
-| Codely (interactive or ACP initiator) | `-y` only — never pass `-y` together with `--approval-mode` |
-| Codely persistent `swarm worker` | Persist and expect `--approval-mode yolo`; the launcher normalizes any `-y` / `--yolo` spelling to that form before spawn |
-| Cursor | `--yolo` (alias `--force`) |
-| Codex | `--dangerously-bypass-approvals-and-sandbox` |
-
-Full worker-launch rules, including carrier vs external-cli separation, are
-in [team-execution.md](references/team-execution.md#worker-approval-contract).
+For an explicitly authorized YOLO run, use Codely `-y` for the interactive or
+ACP initiator, Cursor Run Everything (`--yolo` or `--force`), and Codex
+`--dangerously-bypass-approvals-and-sandbox` for the corresponding native
+client. In Codely, never pass `-y` together with `--approval-mode`.
+The persistent Codely `swarm worker` launcher always sets `--approval-mode yolo`
+on its own process. Use that launcher only where this profile is authorized.
+See the
+[worker approval contract](references/team-execution.md#worker-approval-contract).
 
 ## Query team state from an external agent
 
@@ -252,6 +254,10 @@ Read the current team guidance and agree whether this task calls for direct
 delivery or independent review. For **direct delivery**, the holder completes
 the task and the leader reports the committed delivery. For a review, use
 separate ordinary tasks so each decision has its own holder and receipt.
+When a member chooses a specific person to do the work, set native
+`assigned_to` or MCP `assignedTo` at creation, including for the member's
+own rework. Omit the assignee for an open pool. Check who claimed the task
+in its status.
 
 1. **Deliver v1.** The implementer completes the work task with the artifact's
    `repository`, `path`, immutable `revision` and SHA-256 of its actual bytes.
@@ -374,16 +380,16 @@ enforce it automatically.
 
 The main session is the natural-language coordinator: it interprets the request
 with this skill, writes one authoritative `WorkflowDefinition` JSON file, and records
-the original request beside the generated definition. The deterministic boundary
-is the existing CLI sequence `validate` → `plan` → `run`; admission computes and
-persists the `definitionHash` and `runId`, which are the durable identities for
-later status and recovery. A generated JSON file alone is not execution evidence.
+the original request beside the generated definition. Follow the CLI sequence
+`validate` → `plan` → `run`. Supply one stable UUID with `--run-id` for the
+intended run and reuse it when retrying admission. Admission computes the
+`definitionHash` and records it with the supplied `runId` for status and recovery.
 After admission, edit the same source through the public Apply operation described
 in the live-editing reference. It validates and writes the actual file, updates
 unclaimed work, and retains the original snapshot of already-owned attempts.
 Saving a JSON file directly is not proof that admitted tasks adopted its changes.
 
-A claimed workflow task stays with its exact owner when the model ends the turn while task-owned background work is still active. `waiting-background` is derived from that claim plus the worker's canonical background activity; it is not a second task status or scheduler. The same member session continues when the existing background completion notification arrives, and exactly one fenced `swarm_task complete` settles the task. Do not rerun the child or replay a committed result. Ending the turn with no task-owned background work and no completion proof still fails closed (`SWARM_TASK_COMPLETION_PROOF_MISSING`). Explicit cancel, stop, a stale fence, background failure, and process crash also stay fail-closed and must not become a later success.
+A claimed workflow task stays with its exact owner when the model ends the turn while task-owned background work is still active. `waiting-background` is derived from that claim plus the worker's canonical background activity; it is not a second task status or scheduler. The same member session continues when the existing background completion notification arrives, and exactly one fenced `swarm_task complete` settles the task. Do not rerun the child or replay a committed result. Ending the turn with no task-owned background work and no completion proof still fails closed (`SWARM_TASK_COMPLETION_PROOF_MISSING`). If a process crashes after recording valid durable proof, authorized recovery can settle the original turn once from that proof. Without proof, a crash or failed execution cannot be reported as success. Honor cancellation, stop and the current fence during recovery.
 
 An unattended leader discloses the carrier that is actually attached (for example ACP) and states that this carrier is not a member executor. It does not call `ask_user`. Parent decisions arrive only through the verified task-owned revisioned command channel. When that channel is unavailable, record a durable `needs_human` result instead of a private prompt.
 
@@ -402,13 +408,12 @@ with dormant headless members still needs explicit activations in this release.
 
 Use the existing Control-plane monitor API or `codely swarm workflow status` for
 an explicit status request or diagnosis, and send durable member messages when
-a decision or handoff is needed. Control-plane does not parse
-natural language, regenerate a chart, call a model, or create a second scheduler;
-it only observes the durable team/run facts already admitted by the main
-session, persists verifiable incident facts, and notifies the leader/coordinator.
-Its periodic inspection tick is not a workflow tick: it never starts or resumes
-a worker, advances a generation, or re-runs a task on its own. Decide whether,
-when and how to recover through the explicit worker/workflow management controls.
+a decision or handoff is needed. Control-plane observes
+admitted team/run facts, persists verifiable incidents and notifies the
+leader/coordinator. Stale-member inspection never starts or resumes a worker.
+A separate lifecycle pass in the same tick can resume eligible parked local
+workers under the enabled idle-wake policy. Neither pass runs a Chart or a
+model. The leader or its configured recovery host owns other recovery actions.
 A fixed `resume` + `retry` sequence is one sample, not the only universal
 strategy or order; choose the action from the durable facts the inspection
 preserved and reported.
@@ -519,17 +524,16 @@ test/build commands or staging steps simply because a team is being created.
 Preserve requested roles and CLI choices. A default Codely controller uses the
 current session without adding model/auth overrides. Use a separate execution
 member only when the requested work needs one; do not assume this interactive
-controller is already a persistent worker. Execution members default to
-YOLO-equivalent tool approval using each CLI's own arguments, as specified in
-[Unattended launch approvals](#unattended-launch-approvals) and the team
-execution reference. This does not change the interactive controller's
-approval policy or authorize extra Git changes, publication or deployment.
+controller is already a persistent worker. Use the
+[approved launch profile](#unattended-launch-approvals) for each member.
+This leaves the controller's approval policy and existing authorization in place.
 
 ## Reveal before authoring
 
 Use the tools and schemas already advertised in the current session. In a
-native Codely chat, `swarm_manage` action `status` shows whether the session
-already owns a team. For a requested new team, use `create` in that session.
+native Codely chat, `swarm_manage` action `status` reports team attachment and
+the current role. For a requested new team, use `create` in the intended leader
+session.
 Look up a specific subcommand's `--help` when its arguments are unknown.
 [Command discovery reference](references/cmd-reveal.md).
 
