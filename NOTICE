@@ -4,12 +4,8 @@ This distribution contains the swarm-workflow skill and its references and
 examples from the Codely CLI project, distributed under the Apache License,
 Version 2.0. The upstream repository LICENSE is reproduced in LICENSE.
 
-Source snapshot: 4252ea2eb3e9fab601f2a2915dddc29c85f71656
+Source snapshot: 8fc331d2194a78b1fb79586ddac7dfa61fb88342
 Source directory: packages/core/src/skills/builtin/swarm-workflow
-Lane E Class-B clarity: Fixed/Flexible front guidance and unattended YOLO
-spellings (-y vs --approval-mode yolo, Cursor --yolo/--force, Codex
-bypass); body matches the issue179-c5-c7 worktree skill after stripping
-host-specific allowedTools.
 
 The README and this distribution notice were added for standalone publication.
 The host-specific allowedTools frontmatter was omitted because third-party
